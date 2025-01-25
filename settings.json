@@ -1,0 +1,23 @@
+{
+  "fees": {
+    "useAutomaticJitoTip": false,
+    "jitoTipAggressiveness": "medium",
+    "useAutomaticPriorityFee": false,
+    "fixedJitoTipAmount": 0.0001,
+    "fixedPriorityFee": 100000
+  },
+  "trade": {
+    "buySlippage": 25,
+    "sellSlippage": 25,
+    "defaultSlippage": 25
+  },
+  "connection": {
+    "rpcUrl": "",
+    "privateKey": ""
+  },
+  "notifications": {
+    "enableDiscordWebhook": false,
+    "notifyOnTrades": true,
+    "notifyOnErrors": true
+  }
+}
