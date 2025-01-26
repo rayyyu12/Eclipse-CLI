@@ -23,6 +23,7 @@ import { copyRaydiumSwap } from "./swaps/raydiumCopySwap";
 import { copyPumpBuySwap, copyPumpSellSwap } from "./swaps/pumpCopySwap";
 import { PortfolioTracker } from "../../utils/positions/portfolioTracker";
 import { deriveInstructionDiscriminator } from '../../utils/swaps/pumpSwap'; // still used for buy/sell detection
+import { CopyTradeSettingsManager, BuyMode } from "../../cli/utils/copyTradingSettings";
 
 // -----------------------------------------------------------------------------
 // INTERFACES
@@ -516,6 +517,18 @@ export class TransactionMonitor extends EventEmitter {
             const connection = credManager.getConnection();
             const wallet = credManager.getKeyPair();
     
+            // Get settings
+            const settingsManager = CopyTradeSettingsManager.getInstance();
+            const settings = settingsManager.getSettings();
+    
+            // Check if protocol is enabled
+            if (swapData.swapType === SwapType.PUMP && !settings.enabled.pump) {
+                throw new Error('Pump.fun trading is disabled in settings');
+            }
+            if (swapData.swapType === SwapType.RAYDIUM && !settings.enabled.raydium) {
+                throw new Error('Raydium trading is disabled in settings');
+            }
+    
             console.log('\nExecuting copy trade...');
             console.log(`Original tx: ${originalSignature}`);
             console.log(`Transaction type: ${swapData.isBuy ? 'BUY' : 'SELL'}`);
@@ -529,30 +542,40 @@ export class TransactionMonitor extends EventEmitter {
                     throw new Error('Missing swap amounts in the original transaction data');
                 }
     
-                // Default token decimals for pump tokens
-                const tokenDecimals = 6;
-    
                 if (pumpData.isBuy) {
-                    // Fixed buy amount for pump tokens
-                    const amountInLamports = 100000; // 0.0001 SOL
+                    let amountInLamports: number;
+    
+                    // Handle buy amount based on settings
+                    if (settings.buyMode === BuyMode.FIXED) {
+                        amountInLamports = settings.fixedBuyAmount * LAMPORTS_PER_SOL;
+                    } else { // MIRROR mode
+                        amountInLamports = pumpData.amountIn * LAMPORTS_PER_SOL;
+                    }
+    
+                    // Apply min/max filters
+                    const amountInSol = amountInLamports / LAMPORTS_PER_SOL;
+                    if (amountInSol < settings.minBuyAmount) {
+                        throw new Error(`Buy amount ${amountInSol} SOL below minimum ${settings.minBuyAmount} SOL`);
+                    }
+                    if (amountInSol > settings.maxBuyAmount) {
+                        throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
+                    }
     
                     console.log('Pump.fun buy details:', {
                         amountInLamports,
                         amountInSOL: amountInLamports / LAMPORTS_PER_SOL,
+                        buyMode: settings.buyMode,
                         monitoredSwap: {
                             tokenChange: pumpData.amountOut,
                             solChange: pumpData.amountIn,
                         }
                     });
     
-                    console.log(`Attempting to buy with ${amountInLamports / LAMPORTS_PER_SOL} SOL`);
-    
                     copySignature = await copyPumpBuySwap(
                         connection,
                         wallet,
                         pumpData,
                         amountInLamports,
-                        0.10  // 10% slippage tolerance
                     );
                 } else {
                     // Sell logic
@@ -568,7 +591,6 @@ export class TransactionMonitor extends EventEmitter {
     
                     if (!position) {
                         console.log('No position found for token, checking token account directly...');
-                        // Fallback to checking token account directly
                         userTokenAccount = await getAssociatedTokenAddress(
                             pumpData.tokenAddress,
                             wallet.publicKey
@@ -588,13 +610,13 @@ export class TransactionMonitor extends EventEmitter {
                         });
                     }
     
-                    // Calculate amount to sell (100% of position to mirror detected sell)
-                    const amountToSell = Math.floor(tokenBalance * Math.pow(10, tokenDecimals));
+                    // Calculate amount to sell (100% of position)
+                    const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6)); // 6 decimals for Pump tokens
     
                     console.log('Sell parameters:', {
                         tokenBalance,
                         amountToSell,
-                        amountToSellDecimal: amountToSell / Math.pow(10, tokenDecimals)
+                        amountToSellDecimal: amountToSell / Math.pow(10, 6)
                     });
     
                     if (amountToSell <= 0) {
@@ -606,7 +628,7 @@ export class TransactionMonitor extends EventEmitter {
                         wallet,
                         pumpData,
                         amountToSell,
-                        0.10 // 10% slippage tolerance
+                        settings.slippageTolerance.pump / 100
                     );
                 }
             } else {
@@ -622,8 +644,24 @@ export class TransactionMonitor extends EventEmitter {
                 const tokenDecimals = userToken?.decimals || 6;
     
                 if (raydiumData.isBuy) {
-                    // Fixed SOL amount for buys
-                    const amountInLamports = 100000; // 0.0001 SOL
+                    let amountInLamports: number;
+    
+                    // Handle buy amount based on settings
+                    if (settings.buyMode === BuyMode.FIXED) {
+                        amountInLamports = settings.fixedBuyAmount * LAMPORTS_PER_SOL;
+                    } else { // MIRROR mode
+                        amountInLamports = raydiumData.amountIn! * LAMPORTS_PER_SOL;
+                    }
+    
+                    // Apply min/max filters
+                    const amountInSol = amountInLamports / LAMPORTS_PER_SOL;
+                    if (amountInSol < settings.minBuyAmount) {
+                        throw new Error(`Buy amount ${amountInSol} SOL below minimum ${settings.minBuyAmount} SOL`);
+                    }
+                    if (amountInSol > settings.maxBuyAmount) {
+                        throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
+                    }
+    
                     console.log(`Attempting Raydium buy with ${amountInLamports / LAMPORTS_PER_SOL} SOL`);
     
                     copySignature = await copyRaydiumSwap(
@@ -631,7 +669,6 @@ export class TransactionMonitor extends EventEmitter {
                         wallet,
                         raydiumData,
                         amountInLamports,
-                        0.5  // 50% slippage for Raydium
                     );
                 } else {
                     // For Raydium sells, get current balance
@@ -655,7 +692,6 @@ export class TransactionMonitor extends EventEmitter {
                             tokenOutMint: NATIVE_MINT.toString()
                         },
                         amountToSell,
-                        0.5  // 50% slippage for Raydium
                     );
                 }
             }
@@ -666,7 +702,7 @@ export class TransactionMonitor extends EventEmitter {
             console.log(`Explorer link: https://solscan.io/tx/${copySignature}`);
             console.log(`Total execution time: ${totalTime}ms`);
     
-            // Optional: Emit success event
+            // Emit success event
             this.emit('copyTradeSuccess', {
                 originalSignature,
                 copySignature,

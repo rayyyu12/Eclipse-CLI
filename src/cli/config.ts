@@ -16,3 +16,21 @@ export const CONFIG = {
         EXIT: '8'
     }
 };
+
+export const ASCII_BANNER = `
+███████╗ ██████╗██╗     ██╗██████╗ ███████╗███████╗
+██╔════╝██╔════╝██║     ██║██╔══██╗██╔════╝██╔════╝
+█████╗  ██║     ██║     ██║██████╔╝███████╗█████╗  
+██╔══╝  ██║     ██║     ██║██╔═══╝ ╚════██║██╔══╝  
+███████╗╚██████╗███████╗██║██║     ███████║███████╗
+╚══════╝ ╚═════╝╚══════╝╚═╝╚═╝     ╚══════╝╚══════╝
+`;
+
+export const COLORS = {
+    PRIMARY: '#FF9277',    // Coral/peach orange
+    SECONDARY: '#2A2A2A',  // Dark gray/black
+    ACCENT: '#F5E6DE',     // Beige/cream
+    BACKGROUND: '#D3D3D3', // Light gray/silver
+    ERROR: '#b52b40',      // Red
+    SUCCESS: '#D3D3FF'     // Lavender
+};

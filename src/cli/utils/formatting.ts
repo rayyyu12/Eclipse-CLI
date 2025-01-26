@@ -2,6 +2,7 @@
 import chalk from 'chalk';
 import { createInterface } from 'readline';
 import ora from 'ora';
+import { COLORS } from '../config';
 
 // Create a local config object if you don't want to import from config.ts
 const SPINNER_CONFIG = {
@@ -22,20 +23,20 @@ export async function promptWithValidation(
 ): Promise<string> {
     while (true) {
         const answer = await new Promise<string>(resolve => {
-            rl.question(chalk.cyan(question), resolve);
+            rl.question(chalk.hex(COLORS.ACCENT)(question), resolve);
         });
         
         if (validator(answer)) {
             return answer;
         }
-        console.log(chalk.red(errorMessage));
+        console.log(chalk.hex(COLORS.ERROR)(errorMessage));
     }
 }
 
 export function displayError(message: string, error?: unknown): void {
     spinner.fail(message);
     if (error) {
-        console.error(chalk.red("Error details:"), 
+        console.error(chalk.hex(COLORS.ERROR)("Error details:"), 
             error instanceof Error ? error.message : 'Unknown error');
     }
 }
@@ -43,6 +44,6 @@ export function displayError(message: string, error?: unknown): void {
 export function displaySuccess(message: string, details?: string): void {
     spinner.succeed(message);
     if (details) {
-        console.log(chalk.green(details));
+        console.log(chalk.hex(COLORS.SUCCESS)(details));
     }
 }

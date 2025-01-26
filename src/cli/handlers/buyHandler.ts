@@ -9,17 +9,18 @@ import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import chalk from 'chalk';
 import { PortfolioTracker } from '../../utils/positions/portfolioTracker';
 import { BlockhashManager } from '../../utils/swaps/blockhashManager';
+import { COLORS } from '../config';
 
 export async function handleBuy(): Promise<void> {
     try {
         const tokenAddress = await promptWithValidation(
-            'Enter token address: ',
+            chalk.hex(COLORS.PRIMARY)('Enter token address: '),
             validatePublicKey,
             'Invalid token address format!'
         );
 
         const solAmount = await promptWithValidation(
-            'Enter SOL amount: ',
+            (chalk.hex(COLORS.PRIMARY)('Enter SOL amount: ')),
             validateSolAmount,
             'Invalid SOL amount! Please enter a positive number.'
         );
@@ -82,9 +83,9 @@ export async function handleBuy(): Promise<void> {
         BlockhashManager.getInstance().cleanup();
 
         displaySuccess('Buy successful!');
-        console.log(chalk.green("\nTransaction Details:"));
-        console.log("Signature:", chalk.cyan(signature));
-        console.log("Explorer:", chalk.cyan(`https://solscan.io/tx/${signature}`));
+        console.log(chalk.hex(COLORS.SUCCESS)("\nTransaction Details:"));
+        console.log("Signature:", chalk.hex(COLORS.PRIMARY)(signature));
+        console.log("Explorer:", chalk.hex(COLORS.PRIMARY)(`https://solscan.io/tx/${signature}`));
 
     } catch (error) {
         // Ensure BlockhashManager is cleaned up on any error

@@ -6,6 +6,7 @@ import { SettingsManager } from '../utils/settingsManager';
 import { CredentialsManager } from '../utils/credentialsManager';
 import { promptWithValidation } from '../utils/formatting';
 import { Settings } from '../types/settings';
+import { COLORS } from '../config';
 
 export async function handleSettings(): Promise<void> {
     const settingsManager = SettingsManager.getInstance();
@@ -16,11 +17,11 @@ export async function handleSettings(): Promise<void> {
         console.clear();
         const settings = settingsManager.getSettings();
         
-        console.log(chalk.cyan.bold('\nSettings Menu'));
-        console.log(chalk.gray('—'.repeat(50)));
+        console.log(chalk.hex(COLORS.PRIMARY)('\nSettings Menu'));
+        console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
         
         // Fee Settings Display
-        console.log(chalk.yellow('\nFee Settings:'));
+        console.log(chalk.hex(COLORS.PRIMARY)('\nFee Settings:'));
         console.log(`1. Jito Tip Mode: ${settings.fees.useAutomaticJitoTip ? 'Automatic' : 'Fixed'}`);
         if (!settings.fees.useAutomaticJitoTip && settings.fees.fixedJitoTipAmount) {
             console.log(`   Fixed Amount: ${settings.fees.fixedJitoTipAmount} SOL`);
@@ -32,12 +33,12 @@ export async function handleSettings(): Promise<void> {
         console.log(`3. Jito Tip Aggressiveness: ${settings.fees.jitoTipAggressiveness}`);
 
         // Trade Settings Display
-        console.log(chalk.yellow('\nTrade Settings:'));
+        console.log(chalk.hex(COLORS.PRIMARY)('\nTrade Settings:'));
         console.log(`4. Buy Slippage: ${settings.trade.buySlippage}%`);
         console.log(`5. Sell Slippage: ${settings.trade.sellSlippage}%`);
 
         // Connection Settings Display
-        console.log(chalk.yellow('\nConnection Settings:'));
+        console.log(chalk.hex(COLORS.PRIMARY)('\nConnection Settings:'));
         try {
             const rpcUrl = credManager.getRpcUrl();
             console.log(`6. RPC URL: ${rpcUrl.substring(0, 20)}...`);
@@ -74,7 +75,7 @@ export async function handleSettings(): Promise<void> {
         }
 
         // Notification Settings Display
-        console.log(chalk.yellow('\nNotification Settings:'));
+        console.log(chalk.hex(COLORS.PRIMARY)('\nNotification Settings:'));
         console.log(`11. Discord Webhook: ${settings.notifications.enableDiscordWebhook ? 'Enabled' : 'Disabled'}`);
         if (settings.notifications.enableDiscordWebhook) {
             console.log(`    URL: ${settings.notifications.discordWebhookUrl ? '********' : 'Not set'}`);
@@ -82,8 +83,8 @@ export async function handleSettings(): Promise<void> {
         console.log(`12. Trade Notifications: ${settings.notifications.notifyOnTrades ? 'Enabled' : 'Disabled'}`);
         console.log(`13. Error Notifications: ${settings.notifications.notifyOnErrors ? 'Enabled' : 'Disabled'}`);
 
-        console.log(chalk.gray('\n14. Return to Main Menu'));
-        console.log(chalk.gray('—'.repeat(50)));
+        console.log(chalk.hex(COLORS.SECONDARY)('\n14. Return to Main Menu'));
+        console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
         const choice = await promptWithValidation(
             'Select an option: ',
@@ -206,7 +207,7 @@ async function handlePriorityFeeSettings(): Promise<void> {
         console.log(chalk.yellow('  1,000,000 = Very high priority'));
         console.log(chalk.yellow('  5,000,000 = Extreme priority'));
         console.log(chalk.yellow('  50,000,000+ = Ultra priority (use with caution)'));
-        console.log(chalk.red('\nWarning: Higher fees will increase transaction costs significantly!'));
+        console.log(chalk.hex(COLORS.ERROR)('\nWarning: Higher fees will increase transaction costs significantly!'));
 
         const amount = await promptWithValidation(
             'Enter fixed priority fee in microLamports/cu: ',
@@ -224,25 +225,25 @@ async function handlePriorityFeeSettings(): Promise<void> {
 
         // Add warning for high fees
         if (parseInt(amount) > 1_000_000) {
-            console.log(chalk.red(`\nWarning: You've set a very high priority fee of ${amount} microLamports/cu`));
-            console.log(chalk.red('This will significantly increase your transaction costs!'));
+            console.log(chalk.hex(COLORS.ERROR)(`\nWarning: You've set a very high priority fee of ${amount} microLamports/cu`));
+            console.log(chalk.hex(COLORS.ERROR)('This will significantly increase your transaction costs!'));
         }
 
-        console.log(chalk.green(`\nPriority fee set to ${amount} microLamports/cu`));
+        console.log(chalk.hex(COLORS.SUCCESS)(`\nPriority fee set to ${amount} microLamports/cu`));
     } else {
         settingsManager.updateFeeSettings({
             useAutomaticPriorityFee: true,
             fixedPriorityFee: undefined
         });
-        console.log(chalk.green('Automatic priority fee calculation enabled'));
+        console.log(chalk.hex(COLORS.SUCCESS)('Automatic priority fee calculation enabled'));
     }
 }
 
 async function handleRpcUrlSettings(): Promise<void> {
     const credManager = CredentialsManager.getInstance();
     
-    console.log(chalk.cyan('\nRPC URL Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nRPC URL Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
     try {
         const currentUrl = credManager.getRpcUrl();
@@ -280,15 +281,15 @@ async function handleRpcUrlSettings(): Promise<void> {
             console.log(chalk.blue('Stored RPC URL:', verifyUrl));
             
             if (verifyUrl === newUrl) {
-                console.log(chalk.green('RPC URL updated and verified successfully!'));
+                console.log(chalk.hex(COLORS.SUCCESS)('RPC URL updated and verified successfully!'));
             } else {
-                console.log(chalk.red('RPC URL verification failed - stored URL does not match input'));
+                console.log(chalk.hex(COLORS.ERROR)('RPC URL verification failed - stored URL does not match input'));
             }
         } catch (error) {
             if (error instanceof Error) {
-                console.log(chalk.red('Failed to update RPC URL:', error.message));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update RPC URL:', error.message));
             } else {
-                console.log(chalk.red('Failed to update RPC URL: Unknown error'));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update RPC URL: Unknown error'));
             }
         }
     }
@@ -297,8 +298,8 @@ async function handleRpcUrlSettings(): Promise<void> {
 async function handlePrivateKeySettings(): Promise<void> {
     const credManager = CredentialsManager.getInstance();
     
-    console.log(chalk.cyan('\nPrivate Key Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nPrivate Key Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
     try {
         credManager.getPrivateKey();
@@ -323,12 +324,12 @@ async function handlePrivateKeySettings(): Promise<void> {
 
         try {
             await credManager.setPrivateKey(newKey);
-            console.log(chalk.green('Private key updated successfully!'));
+            console.log(chalk.hex(COLORS.SUCCESS)('Private key updated successfully!'));
         } catch (error) {
             if (error instanceof Error) {
-                console.log(chalk.red('Failed to update private key:', error.message));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update private key:', error.message));
             } else {
-                console.log(chalk.red('Failed to update private key: Unknown error'));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update private key: Unknown error'));
             }
         }
     }
@@ -337,8 +338,8 @@ async function handlePrivateKeySettings(): Promise<void> {
 async function handleGrpcUrlSettings(): Promise<void> {
     const credManager = CredentialsManager.getInstance();
     
-    console.log(chalk.cyan('\nGRPC URL Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nGRPC URL Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
     try {
         const currentUrl = credManager.getGrpcUrl();
@@ -370,12 +371,12 @@ async function handleGrpcUrlSettings(): Promise<void> {
         console.log(chalk.yellow('\nTesting GRPC connection...'));
         try {
             await credManager.setGrpcUrl(newUrl);
-            console.log(chalk.green('GRPC URL updated and verified successfully!'));
+            console.log(chalk.hex(COLORS.SUCCESS)('GRPC URL updated and verified successfully!'));
         } catch (error) {
             if (error instanceof Error) {
-                console.log(chalk.red('Failed to update GRPC URL:', error.message));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update GRPC URL:', error.message));
             } else {
-                console.log(chalk.red('Failed to update GRPC URL: Unknown error'));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update GRPC URL: Unknown error'));
             }
         }
     }
@@ -384,8 +385,8 @@ async function handleGrpcUrlSettings(): Promise<void> {
 async function handleAuthTokenSettings(): Promise<void> {
     const credManager = CredentialsManager.getInstance();
     
-    console.log(chalk.cyan('\nAuth Token Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nAuth Token Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
     try {
         credManager.getAuthToken();
@@ -409,12 +410,12 @@ async function handleAuthTokenSettings(): Promise<void> {
 
         try {
             await credManager.setAuthToken(newToken);
-            console.log(chalk.green('Auth token updated successfully!'));
+            console.log(chalk.hex(COLORS.SUCCESS)('Auth token updated successfully!'));
         } catch (error) {
             if (error instanceof Error) {
-                console.log(chalk.red('Failed to update auth token:', error.message));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update auth token:', error.message));
             } else {
-                console.log(chalk.red('Failed to update auth token: Unknown error'));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update auth token: Unknown error'));
             }
         }
     }
@@ -423,8 +424,8 @@ async function handleAuthTokenSettings(): Promise<void> {
 async function handleWebSocketSettings(): Promise<void> {
     const credManager = CredentialsManager.getInstance();
     
-    console.log(chalk.cyan('\nWebSocket URL Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nWebSocket URL Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
 
     try {
         const currentUrl = credManager.getWsEndpoint();
@@ -458,12 +459,12 @@ async function handleWebSocketSettings(): Promise<void> {
 
         try {
             await credManager.setWsEndpoint(newUrl);
-            console.log(chalk.green('WebSocket URL updated successfully!'));
+            console.log(chalk.hex(COLORS.SUCCESS)('WebSocket URL updated successfully!'));
         } catch (error) {
             if (error instanceof Error) {
-                console.log(chalk.red('Failed to update WebSocket URL:', error.message));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update WebSocket URL:', error.message));
             } else {
-                console.log(chalk.red('Failed to update WebSocket URL: Unknown error'));
+                console.log(chalk.hex(COLORS.ERROR)('Failed to update WebSocket URL: Unknown error'));
             }
         }
     }
@@ -485,8 +486,8 @@ async function handleErrorNotificationSettings(settingsManager: SettingsManager)
 }
 
 async function handleBuySlippageSettings(settingsManager: SettingsManager): Promise<void> {
-    console.log(chalk.cyan('\nBuy Slippage Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nBuy Slippage Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
     
     const currentSettings = settingsManager.getSettings();
     console.log(`Current buy slippage: ${currentSettings.trade.buySlippage}%`);
@@ -507,12 +508,12 @@ async function handleBuySlippageSettings(settingsManager: SettingsManager): Prom
         }
     });
 
-    console.log(chalk.green(`\nBuy slippage updated to ${newSlippage}%`));
+    console.log(chalk.hex(COLORS.SUCCESS)(`\nBuy slippage updated to ${newSlippage}%`));
 }
 
 async function handleSellSlippageSettings(settingsManager: SettingsManager): Promise<void> {
-    console.log(chalk.cyan('\nSell Slippage Settings'));
-    console.log(chalk.gray('—'.repeat(50)));
+    console.log(chalk.hex(COLORS.PRIMARY)('\nSell Slippage Settings'));
+    console.log(chalk.hex(COLORS.SECONDARY)('—'.repeat(50)));
     
     const currentSettings = settingsManager.getSettings();
     console.log(`Current sell slippage: ${currentSettings.trade.sellSlippage}%`);
@@ -533,5 +534,5 @@ async function handleSellSlippageSettings(settingsManager: SettingsManager): Pro
         }
     });
 
-    console.log(chalk.green(`\nSell slippage updated to ${newSlippage}%`));
+    console.log(chalk.hex(COLORS.SUCCESS)(`\nSell slippage updated to ${newSlippage}%`));
 }

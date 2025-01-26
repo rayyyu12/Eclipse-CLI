@@ -34,6 +34,7 @@ import { SettingsManager } from "../../../cli/utils/settingsManager";
 import { BlockhashManager } from "../../../utils/swaps/blockhashManager";
 import { PortfolioTracker } from "../../../utils/positions/portfolioTracker";
 import { PumpSwapData } from "../../types/types";
+import { CopyTradeSettingsManager } from "../../../cli/utils/copyTradingSettings";
 
 // We add performance measurement from Node's perf_hooks
 import { performance } from 'perf_hooks';
@@ -397,8 +398,9 @@ export async function copyPumpBuySwap(
     wallet: Keypair,
     swapData: PumpSwapData,
     amountInLamports: number,
-    slippageTolerance: number = 0.10
 ): Promise<string> {
+    const settings = CopyTradeSettingsManager.getInstance().getSettings();
+    const slippageTolerance = settings.slippageTolerance.pump / 100;
     const overallStart = performance.now();
     console.log("\nInitiating pump.fun copy BUY, using on-chain bonding curve...");
 

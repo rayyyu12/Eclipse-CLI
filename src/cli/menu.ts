@@ -1,6 +1,6 @@
 // src/cli/menu.ts
 import chalk from 'chalk';
-import { CONFIG } from './config';
+import { CONFIG, COLORS, ASCII_BANNER } from './config';
 import { rl } from './utils/formatting';
 import { handleBuy } from './handlers/buyHandler';
 import { handleSell } from './handlers/sellHandler';
@@ -10,17 +10,17 @@ import { handleCopyTrade } from './handlers/copyTradeHandler';
 
 export function displayMenu(): void {
     console.clear();
-    console.log(chalk.cyan.bold("\nEclipse Trading CLI"));
-    console.log(chalk.gray("—".repeat(CONFIG.MENU_WIDTH)));
-    console.log(chalk.white("1. ") + chalk.green("Buy"));
-    console.log(chalk.white("2. ") + chalk.red("Sell"));
-    console.log(chalk.white("3. ") + chalk.blue("Positions"));
-    console.log(chalk.white("4. ") + chalk.yellow("Balance"));
-    console.log(chalk.white("5. ") + chalk.magenta("Transfer"));
-    console.log(chalk.white("6. ") + chalk.cyan("Copy Trade"));
-    console.log(chalk.white("7. ") + chalk.gray("Settings"));
-    console.log(chalk.white("8. ") + chalk.red("Exit"));
-    console.log(chalk.gray("—".repeat(CONFIG.MENU_WIDTH)));
+    console.log(chalk.hex(COLORS.PRIMARY).bold(ASCII_BANNER));
+    console.log(chalk.hex(COLORS.SECONDARY)("—".repeat(CONFIG.MENU_WIDTH)));
+    console.log(chalk.white("1. ") + chalk.hex(COLORS.ACCENT)("Buy"));
+    console.log(chalk.white("2. ") + chalk.hex(COLORS.ACCENT)("Sell"));
+    console.log(chalk.white("3. ") + chalk.hex(COLORS.ACCENT)("Positions"));
+    console.log(chalk.white("4. ") + chalk.hex(COLORS.ACCENT)("Balance"));
+    console.log(chalk.white("5. ") + chalk.hex(COLORS.ACCENT)("Transfer"));
+    console.log(chalk.white("6. ") + chalk.hex(COLORS.ACCENT)("Copy Trade"));
+    console.log(chalk.white("7. ") + chalk.hex(COLORS.ACCENT)("Settings"));
+    console.log(chalk.white("8. ") + chalk.hex(COLORS.ACCENT)("Exit"));
+    console.log(chalk.hex(COLORS.SECONDARY)("—".repeat(CONFIG.MENU_WIDTH)));
 }
 
 export async function handleMenuChoice(choice: string): Promise<boolean> {
@@ -49,14 +49,14 @@ export async function handleMenuChoice(choice: string): Promise<boolean> {
             await handleSettings();
             break;
         case CONFIG.COMMANDS.EXIT:
-            console.log(chalk.green("Goodbye!"));
+            console.log(chalk.hex(COLORS.SUCCESS)("Goodbye!"));
             return false;
         default:
             console.log(chalk.red("Invalid option"));
     }
 
     await new Promise<void>(resolve => {
-        rl.question(chalk.gray('\nPress Enter to continue...'), () => resolve());
+        rl.question(chalk.hex(COLORS.SECONDARY)('\nPress Enter to continue...'), () => resolve());
     });
 
     return true;

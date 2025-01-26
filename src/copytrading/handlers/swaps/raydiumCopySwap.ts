@@ -25,6 +25,7 @@ import { sendJitoTransaction, prepareJitoTip } from "../../../utils/fees/jito";
 import BN from "bn.js";
 import { BlockhashManager } from "../../../utils/swaps/blockhashManager";
 import { PortfolioTracker } from "../../../utils/positions/portfolioTracker";
+import { CopyTradeSettingsManager } from "../../../cli/utils/copyTradingSettings";
 
 const DEFAULT_PRIORITY_FEE = 100_000;
 const POOL_FEE_BUFFER = 0.003; // 0.3%
@@ -101,9 +102,11 @@ export async function copyRaydiumSwap(
     wallet: Keypair,
     swapData: RaydiumSwapData,
     amountIn: number,
-    slippageTolerance: number = 0.5
 ): Promise<string> {
     console.log("\nInitiating copy trade...");
+    const copyTradeSettings = CopyTradeSettingsManager.getInstance().getSettings();
+    const generalSettings = SettingsManager.getInstance().getSettings();
+    const slippageTolerance = copyTradeSettings.slippageTolerance.raydium / 100;
 
     if (!swapData.poolBalances?.coin || !swapData.poolBalances?.pc) {
         throw new Error("Missing pool balance information");
@@ -125,8 +128,7 @@ export async function copyRaydiumSwap(
     ]);
 
     // Handle priority fee
-    const settings = SettingsManager.getInstance().getSettings();
-    const priorityFeeEstimate = settings.fees.fixedPriorityFee || DEFAULT_PRIORITY_FEE;
+    const priorityFeeEstimate = generalSettings.fees.fixedPriorityFee || DEFAULT_PRIORITY_FEE;
 
     // Build instructions array
     const instructions = [];

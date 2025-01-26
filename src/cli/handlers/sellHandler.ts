@@ -11,6 +11,7 @@ import { NATIVE_MINT } from "@solana/spl-token";
 import { discoverPool } from '../../utils/pools/poolDiscovery';
 import { BlockhashManager } from '../../utils/swaps/blockhashManager';
 import chalk from 'chalk';
+import { COLORS } from '../config';
 
 export async function handleSell(): Promise<void> {
     try {
@@ -117,9 +118,9 @@ export async function handleSell(): Promise<void> {
                 BlockhashManager.getInstance().cleanup();
 
                 displaySuccess('Swap successful!');
-                console.log(chalk.green("\nTransaction Details:"));
-                console.log("Signature:", chalk.cyan(signature));
-                console.log("Explorer:", chalk.cyan(`https://solscan.io/tx/${signature}`));
+                console.log(chalk.hex(COLORS.SUCCESS)("\nTransaction Details:"));
+                console.log("Signature:", chalk.hex(COLORS.PRIMARY)(signature));
+                console.log("Explorer:", chalk.hex(COLORS.PRIMARY)(`https://solscan.io/tx/${signature}`));
 
             } catch (error) {
                 BlockhashManager.getInstance().cleanup(); // Cleanup on swap error
@@ -141,9 +142,9 @@ export async function handleSell(): Promise<void> {
                 BlockhashManager.getInstance().cleanup();
 
                 displaySuccess('Swap successful!');
-                console.log(chalk.green("\nTransaction Details:"));
-                console.log("Signature:", chalk.cyan(signature));
-                console.log("Explorer:", chalk.cyan(`https://solscan.io/tx/${signature}`));
+                console.log(chalk.hex(COLORS.SUCCESS)("\nTransaction Details:"));
+                console.log("Signature:", chalk.hex(COLORS.PRIMARY)(signature));
+                console.log("Explorer:", chalk.hex(COLORS.PRIMARY)(`https://solscan.io/tx/${signature}`));
 
             } catch (error) {
                 BlockhashManager.getInstance().cleanup(); // Cleanup on swap error
