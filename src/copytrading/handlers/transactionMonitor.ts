@@ -4,12 +4,10 @@
 import { EventEmitter } from "events";
 import { default as Client, CommitmentLevel } from "@triton-one/yellowstone-grpc";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, NATIVE_MINT, getAssociatedTokenAddress, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { NATIVE_MINT, getAssociatedTokenAddress } from "@solana/spl-token";
 import bs58 from "bs58";
+import chalk from 'chalk';
 
-// -----------------------------------------------------------------------------
-// CONSTANTS & IMPORTS
-// -----------------------------------------------------------------------------
 import {
     PUMP_FUN_PROGRAM_ID,
     RAYDIUM_AMM_PROGRAM_ID,
@@ -21,13 +19,12 @@ import {
 import { CredentialsManager } from "../../cli/utils/credentialsManager";
 import { copyRaydiumSwap } from "./swaps/raydiumCopySwap";
 import { copyPumpBuySwap, copyPumpSellSwap } from "./swaps/pumpCopySwap";
-import { PortfolioTracker } from "../../utils/positions/portfolioTracker";
-import { deriveInstructionDiscriminator } from '../../utils/swaps/pumpSwap'; // still used for buy/sell detection
+import { PortfolioTracker } from '../../utils/positions/portfolioTracker';
+import { deriveInstructionDiscriminator } from '../../utils/swaps/pumpSwap';
 import { CopyTradeSettingsManager, BuyMode } from "../../cli/utils/copyTradingSettings";
+import { COLORS } from "../../cli/config";
 
-// -----------------------------------------------------------------------------
-// INTERFACES
-// -----------------------------------------------------------------------------
+// Import interfaces from existing document...
 interface MonitorStatus {
     isActive: boolean;
     processedTransactions: number;
@@ -55,11 +52,8 @@ interface PumpSwapData {
     tokenAddress: PublicKey;
     bondingCurve: PublicKey;
     associatedBondingCurve: PublicKey;
-    // virtualTokenReserves and virtualSolReserves are still in the interface,
-    // but we no longer parse them from the transaction itself:
-    virtualTokenReserves: string; 
+    virtualTokenReserves: string;
     virtualSolReserves: string;
-
     walletAddress: string;
     isBuy: boolean;
     success: boolean;
@@ -72,9 +66,6 @@ interface PumpSwapData {
     decimalsOut?: number;
 }
 
-// -----------------------------------------------------------------------------
-// MAIN MONITOR CLASS
-// -----------------------------------------------------------------------------
 export class TransactionMonitor extends EventEmitter {
     private client: Client;
     private status: MonitorStatus;
@@ -92,7 +83,6 @@ export class TransactionMonitor extends EventEmitter {
     private readonly PING_INTERVAL_MS = 30000;
     private readonly MAX_RECONNECT_ATTEMPTS = 5;
     private reconnectAttempts = 0;
-    private readonly WSOL_MINT = "So11111111111111111111111111111111111111112";
     private readonly MAX_PROCESSED_TRANSACTIONS = 1000;
     private walletSet: Set<string>;
     private processedTransactions: Set<string> = new Set();
@@ -133,30 +123,25 @@ export class TransactionMonitor extends EventEmitter {
         this.setupCleanupInterval();
     }
 
-    // -------------------------------------------------------------------------
-    // START & STOP
-    // -------------------------------------------------------------------------
     public async start(): Promise<void> {
         if (this.status.isActive) {
-            console.warn('Monitor is already running');
+            console.warn(chalk.hex(COLORS.ERROR)('Monitor is already running'));
             return;
         }
 
         try {
-            // Initialize portfolio
-            console.log('Initializing portfolio tracker...');
+            console.log(chalk.hex(COLORS.PRIMARY)('Initializing portfolio tracker...'));
             const portfolioTracker = PortfolioTracker.getInstance();
             await portfolioTracker.initializeBalanceMonitoring();
-            console.log('Portfolio tracker initialized');
+            console.log(chalk.hex(COLORS.SUCCESS)('Portfolio tracker initialized'));
 
-            // Connect to transaction stream
             await this.connect();
             this.status.isActive = true;
             this.status.connectedAt = new Date();
             this.emit('started', this.status);
             this.setupReconnection();
         } catch (error) {
-            console.error('Error starting monitor:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error starting monitor:'), error);
             this.emit('error', {
                 type: 'STARTUP_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown startup error',
@@ -187,14 +172,11 @@ export class TransactionMonitor extends EventEmitter {
             this.emit('stopped', this.status);
 
         } catch (error) {
-            console.error('Error stopping monitor:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error stopping monitor:'), error);
             throw error;
         }
     }
 
-    // -------------------------------------------------------------------------
-    // CONNECTION & RECONNECTION
-    // -------------------------------------------------------------------------
     private async connect(): Promise<void> {
         try {
             this.subscription = await this.client.subscribe();
@@ -207,8 +189,8 @@ export class TransactionMonitor extends EventEmitter {
                 throw new Error('At least one program must be enabled for monitoring');
             }
 
-            console.log('Configuring monitors for wallets:', this.config.wallets);
-            console.log('Programs being monitored:', programsToMonitor);
+            console.log(chalk.hex(COLORS.PRIMARY)('Configuring monitors for wallets:'), this.config.wallets);
+            console.log(chalk.hex(COLORS.PRIMARY)('Programs being monitored:'), programsToMonitor);
 
             const request = {
                 accounts: {},
@@ -240,7 +222,7 @@ export class TransactionMonitor extends EventEmitter {
             });
 
             this.subscription.on('error', (error: Error) => {
-                console.error('Stream error:', error);
+                console.error(chalk.hex(COLORS.ERROR)('Stream error:'), error);
                 this.emit('error', {
                     type: 'SUBSCRIPTION_ERROR',
                     message: error.message,
@@ -251,32 +233,32 @@ export class TransactionMonitor extends EventEmitter {
             await new Promise<void>((resolve, reject) => {
                 this.subscription.write(request, (err: Error | null) => {
                     if (err) {
-                        console.error('Error writing subscription:', err);
+                        console.error(chalk.hex(COLORS.ERROR)('Error writing subscription:'), err);
                         reject(err);
                     } else {
-                        console.log('Successfully subscribed to transaction stream');
+                        console.log(chalk.hex(COLORS.SUCCESS)('Successfully subscribed to transaction stream'));
                         resolve();
                     }
                 });
             });
 
             this.setupPingInterval();
-            console.log('Transaction monitor fully initialized');
+            console.log(chalk.hex(COLORS.SUCCESS)('Transaction monitor fully initialized'));
 
         } catch (error) {
-            console.error('Error in connection process:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error in connection process:'), error);
             throw error;
         }
     }
 
     private setupReconnection(): void {
         this.subscription.on('end', () => {
-            console.warn('Subscription ended unexpectedly');
+            console.warn(chalk.hex(COLORS.ERROR)('Subscription ended unexpectedly'));
             this.attemptReconnect();
         });
 
         this.subscription.on('close', () => {
-            console.warn('Subscription closed unexpectedly');
+            console.warn(chalk.hex(COLORS.ERROR)('Subscription closed unexpectedly'));
             this.attemptReconnect();
         });
     }
@@ -284,7 +266,7 @@ export class TransactionMonitor extends EventEmitter {
     private async attemptReconnect(): Promise<void> {
         if (!this.status.isActive) return;
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.error('Max reconnection attempts reached');
+            console.error(chalk.hex(COLORS.ERROR)('Max reconnection attempts reached'));
             this.emit('error', {
                 type: 'MAX_RECONNECT_ERROR',
                 message: 'Failed to reconnect after maximum attempts',
@@ -295,31 +277,27 @@ export class TransactionMonitor extends EventEmitter {
         }
 
         this.reconnectAttempts++;
-        console.log(`Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
+        console.log(chalk.hex(COLORS.PRIMARY)(`Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`));
 
         try {
             await this.connect();
             this.reconnectAttempts = 0;
-            console.log('Successfully reconnected');
+            console.log(chalk.hex(COLORS.SUCCESS)('Successfully reconnected'));
         } catch (error) {
-            console.error('Reconnection attempt failed:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Reconnection attempt failed:'), error);
             setTimeout(() => this.attemptReconnect(), 5000);
         }
     }
 
-    // -------------------------------------------------------------------------
-    // PING & CLEANUP
-    // -------------------------------------------------------------------------
     private setupPingInterval(): void {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
-        }
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        
         this.pingInterval = setInterval(() => {
             const status = this.getStatus();
             if (status.lastTransactionAt) {
                 const lastTxAge = Date.now() - status.lastTransactionAt.getTime();
                 if (lastTxAge > this.PING_INTERVAL_MS * 2) {
-                    console.warn(`No transactions received for ${Math.round(lastTxAge / 1000)}s`);
+                    console.warn(chalk.hex(COLORS.ERROR)(`No transactions received for ${Math.round(lastTxAge / 1000)}s`));
                     this.attemptReconnect();
                 }
             }
@@ -327,26 +305,19 @@ export class TransactionMonitor extends EventEmitter {
     }
 
     private setupCleanupInterval(): void {
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
-        }
+        if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+        
         this.cleanupInterval = setInterval(() => {
             if (this.processedTransactions.size > this.MAX_PROCESSED_TRANSACTIONS) {
                 const transactions = Array.from(this.processedTransactions);
                 const toKeep = transactions.slice(-this.MAX_PROCESSED_TRANSACTIONS);
                 this.processedTransactions = new Set(toKeep);
-                console.log(`Cleaned up processed transactions. New size: ${this.processedTransactions.size}`);
             }
         }, 60 * 60 * 1000);
     }
 
-    // -------------------------------------------------------------------------
-    // TRANSACTION HANDLING
-    // -------------------------------------------------------------------------
     private async handleTransaction(tx: any): Promise<void> {
         try {
-            const startTime = Date.now();
-
             if (!tx.transaction?.signature) return;
 
             const signature = tx.transaction.signature instanceof Uint8Array
@@ -355,17 +326,12 @@ export class TransactionMonitor extends EventEmitter {
                     ? bs58.encode(Buffer.from(tx.transaction.signature.data))
                     : tx.transaction.signature;
 
-            // Duplicate check
-            if (this.processedTransactions.has(signature)) {
-                console.log(`Skipping already processed transaction: ${signature}`);
-                return;
-            }
+            if (this.processedTransactions.has(signature)) return;
             this.processedTransactions.add(signature);
 
             const walletAddress = await this.extractWalletAddress(tx);
             if (!walletAddress || !this.walletSet.has(walletAddress)) return;
 
-            // Skip if it's our own bot's address
             const botWallet = CredentialsManager.getInstance().getKeyPair().publicKey.toString();
             if (walletAddress === botWallet) return;
 
@@ -377,59 +343,35 @@ export class TransactionMonitor extends EventEmitter {
                 (typeof log === 'string' ? log : log.message).includes('ray_log:')
             );
 
-            // Skip if neither
             if (!isPumpTransaction && !isRaydiumTransaction) return;
 
             let swapData: RaydiumSwapData | PumpSwapData | null = null;
 
             if (isPumpTransaction) {
-                console.log('\nProcessing pump.fun transaction...');
                 swapData = this.extractPumpSwapDetails(tx, walletAddress);
                 if (swapData?.success && swapData?.amountIn !== undefined && swapData?.amountOut !== undefined) {
-                    try {
-                        await this.executeCopyTrade(swapData, signature);
-                    } catch (error) {
-                        console.error('\nPump.fun copy trade execution error:', error);
-                        this.emit('error', {
-                            type: 'PUMP_COPY_TRADE_ERROR',
-                            message: error instanceof Error ? error.message : 'Unknown pump.fun copy trade error',
-                            timestamp: new Date()
-                        });
-                    }
-                } else {
-                    console.log('Skipping pump.fun transaction - invalid or incomplete swap data');
+                    await this.executeCopyTrade(swapData, signature);
                 }
             } else {
-                console.log('\nProcessing Raydium transaction...');
-                const rayLog = logs.find((log: any) => (typeof log === 'string' ? log : log.message).includes('ray_log:'));
+                const rayLog = logs.find((log: any) => 
+                    (typeof log === 'string' ? log : log.message).includes('ray_log:')
+                );
                 if (!rayLog) return;
 
-                // Extract pool
                 const poolAccountsData = await this.extractRaydiumPoolAccounts(tx);
                 if (!poolAccountsData) return;
 
-                // Build swap details
                 const [preBalances, postBalances] = [
                     tx.transaction.meta?.preTokenBalances || [],
                     tx.transaction.meta?.postTokenBalances || []
                 ];
+                
                 const tokenChanges = this.calculateTokenChanges(preBalances, postBalances);
-
-                const swapDetails = await this.extractSwapDetails(
-                    tx,
-                    walletAddress,
-                    poolAccountsData,
-                    preBalances,
-                    postBalances
-                );
+                const swapDetails = await this.extractSwapDetails(tx, walletAddress, poolAccountsData, preBalances, postBalances);
+                
                 if (!tokenChanges || !swapDetails) return;
 
-                // Determine direction
-                const swapDirection = this.detectSwapDirection(
-                    preBalances,
-                    postBalances,
-                    swapDetails.poolBalances
-                );
+                const swapDirection = this.detectSwapDirection(preBalances, postBalances, swapDetails.poolBalances);
 
                 swapData = {
                     swapType: SwapType.RAYDIUM,
@@ -469,16 +411,7 @@ export class TransactionMonitor extends EventEmitter {
                 };
 
                 if (swapData.success) {
-                    try {
-                        await this.executeCopyTrade(swapData, signature);
-                    } catch (error) {
-                        console.error('\nRaydium copy trade execution error:', error);
-                        this.emit('error', {
-                            type: 'COPY_TRADE_ERROR',
-                            message: error instanceof Error ? error.message : 'Unknown copy trade error',
-                            timestamp: new Date()
-                        });
-                    }
+                    await this.executeCopyTrade(swapData, signature);
                 }
             }
 
@@ -486,6 +419,7 @@ export class TransactionMonitor extends EventEmitter {
 
             this.status.lastTransactionAt = new Date();
             this.status.detectedSwaps++;
+            
             if (swapData.success) {
                 this.status.successfulCopies++;
             } else {
@@ -494,11 +428,8 @@ export class TransactionMonitor extends EventEmitter {
 
             this.emit('swap', swapData);
 
-            const totalTime = Date.now() - startTime;
-            console.log(`Total transaction processing time: ${totalTime}ms`);
-
         } catch (error) {
-            console.error('Error processing transaction:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error processing transaction:'), error);
             this.emit('error', {
                 type: 'PARSE_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error processing transaction',
@@ -511,48 +442,37 @@ export class TransactionMonitor extends EventEmitter {
     // COPY TRADE EXECUTION
     // -------------------------------------------------------------------------
     private async executeCopyTrade(swapData: RaydiumSwapData | PumpSwapData, originalSignature: string): Promise<void> {
-        const startTime = Date.now();
         try {
             const credManager = CredentialsManager.getInstance();
             const connection = credManager.getConnection();
             const wallet = credManager.getKeyPair();
-    
-            // Get settings
-            const settingsManager = CopyTradeSettingsManager.getInstance();
-            const settings = settingsManager.getSettings();
-    
-            // Check if protocol is enabled
+            const settings = CopyTradeSettingsManager.getInstance().getSettings();
+
             if (swapData.swapType === SwapType.PUMP && !settings.enabled.pump) {
                 throw new Error('Pump.fun trading is disabled in settings');
             }
             if (swapData.swapType === SwapType.RAYDIUM && !settings.enabled.raydium) {
                 throw new Error('Raydium trading is disabled in settings');
             }
-    
-            console.log('\nExecuting copy trade...');
-            console.log(`Original tx: ${originalSignature}`);
-            console.log(`Transaction type: ${swapData.isBuy ? 'BUY' : 'SELL'}`);
-            console.log(`Protocol: ${swapData.swapType}`);
-    
+
+            console.log(chalk.hex(COLORS.PRIMARY)('\nExecuting copy trade...'));
+            console.log(`Original tx: ${chalk.hex(COLORS.ACCENT)(originalSignature)}`);
+            console.log(`Type: ${chalk.hex(COLORS.ACCENT)(swapData.isBuy ? 'BUY' : 'SELL')}`);
+            console.log(`Protocol: ${chalk.hex(COLORS.ACCENT)(swapData.swapType)}`);
+
             let copySignature: string;
-    
+
             if (swapData.swapType === SwapType.PUMP) {
                 const pumpData = swapData as PumpSwapData;
-                if (typeof pumpData.amountOut === 'undefined' || typeof pumpData.amountIn === 'undefined') {
-                    throw new Error('Missing swap amounts in the original transaction data');
+                if (!pumpData.amountOut || !pumpData.amountIn) {
+                    throw new Error('Missing swap amounts in original transaction');
                 }
-    
+
                 if (pumpData.isBuy) {
-                    let amountInLamports: number;
-    
-                    // Handle buy amount based on settings
-                    if (settings.buyMode === BuyMode.FIXED) {
-                        amountInLamports = settings.fixedBuyAmount * LAMPORTS_PER_SOL;
-                    } else { // MIRROR mode
-                        amountInLamports = pumpData.amountIn * LAMPORTS_PER_SOL;
-                    }
-    
-                    // Apply min/max filters
+                    let amountInLamports = settings.buyMode === BuyMode.FIXED ? 
+                        settings.fixedBuyAmount * LAMPORTS_PER_SOL : 
+                        pumpData.amountIn * LAMPORTS_PER_SOL;
+
                     const amountInSol = amountInLamports / LAMPORTS_PER_SOL;
                     if (amountInSol < settings.minBuyAmount) {
                         throw new Error(`Buy amount ${amountInSol} SOL below minimum ${settings.minBuyAmount} SOL`);
@@ -560,100 +480,58 @@ export class TransactionMonitor extends EventEmitter {
                     if (amountInSol > settings.maxBuyAmount) {
                         throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
                     }
-    
-                    console.log('Pump.fun buy details:', {
-                        amountInLamports,
-                        amountInSOL: amountInLamports / LAMPORTS_PER_SOL,
-                        buyMode: settings.buyMode,
-                        monitoredSwap: {
-                            tokenChange: pumpData.amountOut,
-                            solChange: pumpData.amountIn,
-                        }
-                    });
-    
-                    copySignature = await copyPumpBuySwap(
-                        connection,
-                        wallet,
-                        pumpData,
-                        amountInLamports,
-                    );
+
+                    copySignature = await copyPumpBuySwap(connection, wallet, pumpData, amountInLamports);
                 } else {
-                    // Sell logic
-                    console.log('Initiating pump.fun sell copy...');
-    
-                    // Get current portfolio position for the token
                     const portfolioTracker = PortfolioTracker.getInstance();
-                    let tokenBalance: number;
-                    let userTokenAccount: PublicKey;
-    
-                    // Try getting position from portfolio first
                     const position = await portfolioTracker.getPosition(pumpData.tokenAddress.toString());
-    
+
                     if (!position) {
-                        console.log('No position found for token, checking token account directly...');
-                        userTokenAccount = await getAssociatedTokenAddress(
+                        const userTokenAccount = await getAssociatedTokenAddress(
                             pumpData.tokenAddress,
                             wallet.publicKey
                         );
-    
                         const accountInfo = await connection.getTokenAccountBalance(userTokenAccount);
                         if (!accountInfo?.value?.uiAmount || accountInfo.value.uiAmount <= 0) {
                             throw new Error('No tokens available to sell');
                         }
-                        tokenBalance = accountInfo.value.uiAmount;
+                        const tokenBalance = accountInfo.value.uiAmount;
+                        const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6));
+                        copySignature = await copyPumpSellSwap(
+                            connection, 
+                            wallet, 
+                            pumpData, 
+                            amountToSell,
+                            settings.slippageTolerance.pump / 100
+                        );
                     } else {
-                        tokenBalance = position.remainingValue / position.currentPriceSol;
-                        console.log('Current position:', {
-                            tokenAddress: position.tokenAddress,
-                            currentTokens: tokenBalance,
-                            entryPrice: position.entryPriceSol
-                        });
+                        const tokenBalance = position.remainingValue / position.currentPriceSol;
+                        const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6));
+                        copySignature = await copyPumpSellSwap(
+                            connection, 
+                            wallet, 
+                            pumpData, 
+                            amountToSell,
+                            settings.slippageTolerance.pump / 100
+                        );
                     }
-    
-                    // Calculate amount to sell (100% of position)
-                    const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6)); // 6 decimals for Pump tokens
-    
-                    console.log('Sell parameters:', {
-                        tokenBalance,
-                        amountToSell,
-                        amountToSellDecimal: amountToSell / Math.pow(10, 6)
-                    });
-    
-                    if (amountToSell <= 0) {
-                        throw new Error('Insufficient token balance for sell');
-                    }
-    
-                    copySignature = await copyPumpSellSwap(
-                        connection,
-                        wallet,
-                        pumpData,
-                        amountToSell,
-                        settings.slippageTolerance.pump / 100
-                    );
                 }
             } else {
-                // Raydium swap handling
                 const raydiumData = swapData as RaydiumSwapData;
                 if (!raydiumData.poolBalances?.coin || !raydiumData.poolBalances?.pc) {
                     throw new Error("Missing pool balance information");
                 }
-    
+
                 const userToken = Object.values(raydiumData.userAccounts || {}).find(
                     (acct: any) => acct.mint === raydiumData.tokenAddress.toString()
                 );
                 const tokenDecimals = userToken?.decimals || 6;
-    
+
                 if (raydiumData.isBuy) {
-                    let amountInLamports: number;
-    
-                    // Handle buy amount based on settings
-                    if (settings.buyMode === BuyMode.FIXED) {
-                        amountInLamports = settings.fixedBuyAmount * LAMPORTS_PER_SOL;
-                    } else { // MIRROR mode
-                        amountInLamports = raydiumData.amountIn! * LAMPORTS_PER_SOL;
-                    }
-    
-                    // Apply min/max filters
+                    let amountInLamports = settings.buyMode === BuyMode.FIXED ? 
+                        settings.fixedBuyAmount * LAMPORTS_PER_SOL : 
+                        raydiumData.amountIn! * LAMPORTS_PER_SOL;
+
                     const amountInSol = amountInLamports / LAMPORTS_PER_SOL;
                     if (amountInSol < settings.minBuyAmount) {
                         throw new Error(`Buy amount ${amountInSol} SOL below minimum ${settings.minBuyAmount} SOL`);
@@ -661,28 +539,19 @@ export class TransactionMonitor extends EventEmitter {
                     if (amountInSol > settings.maxBuyAmount) {
                         throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
                     }
-    
-                    console.log(`Attempting Raydium buy with ${amountInLamports / LAMPORTS_PER_SOL} SOL`);
-    
-                    copySignature = await copyRaydiumSwap(
-                        connection,
-                        wallet,
-                        raydiumData,
-                        amountInLamports,
-                    );
+
+                    copySignature = await copyRaydiumSwap(connection, wallet, raydiumData, amountInLamports);
                 } else {
-                    // For Raydium sells, get current balance
                     const portfolioTracker = PortfolioTracker.getInstance();
                     const position = await portfolioTracker.getPosition(raydiumData.tokenAddress.toString());
                     
                     if (!position) {
                         throw new Error('No token position found for selling');
                     }
-    
+
                     const tokenAmount = position.remainingValue / position.currentPriceSol;
                     const amountToSell = Math.floor(tokenAmount * Math.pow(10, tokenDecimals));
-                    console.log(`Attempting Raydium sell of ${tokenAmount} tokens`);
-    
+
                     copySignature = await copyRaydiumSwap(
                         connection,
                         wallet,
@@ -691,31 +560,26 @@ export class TransactionMonitor extends EventEmitter {
                             tokenInMint: raydiumData.tokenAddress.toString(),
                             tokenOutMint: NATIVE_MINT.toString()
                         },
-                        amountToSell,
+                        amountToSell
                     );
                 }
             }
-    
-            const totalTime = Date.now() - startTime;
-            console.log('\nCopy Trade Results:');
-            console.log(`Transaction signature: ${copySignature}`);
-            console.log(`Explorer link: https://solscan.io/tx/${copySignature}`);
-            console.log(`Total execution time: ${totalTime}ms`);
-    
-            // Emit success event
+
+            console.log(chalk.hex(COLORS.SUCCESS)('\nCopy Trade Success:'));
+            console.log(`Signature: ${chalk.hex(COLORS.ACCENT)(copySignature)}`);
+            console.log(`Explorer: ${chalk.hex(COLORS.SUCCESS)(`https://solscan.io/tx/${copySignature}`)}`);
+
             this.emit('copyTradeSuccess', {
                 originalSignature,
                 copySignature,
                 protocol: swapData.swapType,
                 type: swapData.isBuy ? 'BUY' : 'SELL',
-                tokenAddress: swapData.tokenAddress.toString(),
-                executionTime: totalTime
+                tokenAddress: swapData.tokenAddress.toString()
             });
-    
+
         } catch (error) {
-            console.error('\nCopy trade failed:', error);
+            console.error(chalk.hex(COLORS.ERROR)('\nCopy trade failed:'), error);
             
-            // Emit error event
             this.emit('copyTradeError', {
                 originalSignature,
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -723,7 +587,7 @@ export class TransactionMonitor extends EventEmitter {
                 type: swapData.isBuy ? 'BUY' : 'SELL',
                 tokenAddress: swapData.tokenAddress.toString()
             });
-    
+
             throw error;
         }
     }
@@ -745,10 +609,8 @@ export class TransactionMonitor extends EventEmitter {
                     new PublicKey(programId).equals(PUMP_FUN_PROGRAM_ID)
                 );
             });
-            if (!pumpInstruction) {
-                console.log('No pump.fun instruction found');
-                return null;
-            }
+            
+            if (!pumpInstruction) return null;
 
             const data = Buffer.from(pumpInstruction.data);
             const buyDiscriminator = deriveInstructionDiscriminator('global', 'buy');
@@ -756,10 +618,7 @@ export class TransactionMonitor extends EventEmitter {
 
             const isBuy = data.slice(0, 8).equals(buyDiscriminator);
             const isSell = data.slice(0, 8).equals(sellDiscriminator);
-            if (!isBuy && !isSell) {
-                console.log('Not a pump.fun swap instruction');
-                return null;
-            }
+            if (!isBuy && !isSell) return null;
 
             const getAccountFromIndex = (index: number): PublicKey => {
                 const account = accounts[index];
@@ -782,21 +641,14 @@ export class TransactionMonitor extends EventEmitter {
             const tokenPreBalance = preBalances.find((b: TokenBalance) => b.accountIndex === keys[5]);
             const tokenPostBalance = postBalances.find((b: TokenBalance) => b.accountIndex === keys[5]);
 
-            // Calculate token changes with improved error handling
             let tokenAmount: number | undefined;
             const preAmount = tokenPreBalance?.uiTokenAmount?.uiAmount ?? 0;
             const postAmount = tokenPostBalance?.uiTokenAmount?.uiAmount;
 
             if (postAmount !== undefined) {
                 tokenAmount = Math.abs(Number(postAmount) - Number(preAmount));
-                console.log("Token balance change:", {
-                    preAmount,
-                    postAmount,
-                    tokenAmount
-                });
             }
 
-            // Calculate SOL change with improved accuracy
             const accountPreBalances = tx.transaction.meta?.preBalances || [];
             const accountPostBalances = tx.transaction.meta?.postBalances || [];
             const walletIndex = accounts.findIndex((acc: any) => {
@@ -813,50 +665,33 @@ export class TransactionMonitor extends EventEmitter {
                 solChange = Math.abs(accountPostBalances[walletIndex] - accountPreBalances[walletIndex]) / LAMPORTS_PER_SOL;
             }
 
-            if (solChange === undefined || tokenAmount === undefined) {
-                console.log('Warning: Unable to calculate swap amounts', { solChange, tokenAmount });
-                return null;
-            }
+            if (solChange === undefined || tokenAmount === undefined) return null;
 
             const swapData: PumpSwapData = {
                 swapType: SwapType.PUMP,
                 tokenAddress: mint,
                 bondingCurve,
                 associatedBondingCurve,
-                virtualTokenReserves: '',  // We'll read these from chain
-                virtualSolReserves: '',    // We'll read these from chain
+                virtualTokenReserves: '',
+                virtualSolReserves: '',
                 walletAddress,
                 isBuy,
                 success: tx.transaction.meta?.err == null,
                 userTokenAccount,
-                // For buys: amountIn is SOL, amountOut is tokens
-                // For sells: amountIn is tokens, amountOut is SOL
                 amountIn: isBuy ? solChange : tokenAmount,
                 amountOut: isBuy ? tokenAmount : solChange,
-                decimalsIn: isBuy ? 9 : 6,   // SOL has 9 decimals, tokens have 6
-                decimalsOut: isBuy ? 6 : 9,  // Reversed for sells
+                decimalsIn: isBuy ? 9 : 6,
+                decimalsOut: isBuy ? 6 : 9,
                 signature: tx.transaction.signature instanceof Uint8Array
                     ? bs58.encode(tx.transaction.signature)
                     : tx.transaction.signature,
                 timestamp: new Date()
             };
 
-            const txType = isBuy ? 'BUY' : 'SELL';
-            console.log(`\nDetected pump.fun ${txType}:`, {
-                mint: mint.toString(),
-                bondingCurve: bondingCurve.toString(),
-                associatedBondingCurve: associatedBondingCurve.toString(),
-                userTokenAccount: userTokenAccount.toString(),
-                tokenChange: tokenAmount,
-                solChange,
-                amountIn: swapData.amountIn,
-                amountOut: swapData.amountOut,
-                success: swapData.success
-            });
-
             return swapData;
+
         } catch (error) {
-            console.error('Error extracting pump.fun swap details:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error extracting pump.fun swap details:'), error);
             return null;
         }
     }
@@ -867,10 +702,7 @@ export class TransactionMonitor extends EventEmitter {
     private extractRaydiumPoolAccounts(tx: any): RaydiumSwapData | null {
         try {
             const accounts = tx.transaction?.transaction?.message?.accountKeys;
-            if (!accounts || !Array.isArray(accounts)) {
-                console.log('No account keys found in transaction');
-                return null;
-            }
+            if (!accounts || !Array.isArray(accounts)) return null;
 
             const instructions = tx.transaction?.transaction?.message?.instructions;
             const raydiumInstruction = instructions?.find((ix: any) => {
@@ -880,10 +712,8 @@ export class TransactionMonitor extends EventEmitter {
                     new PublicKey(programId).equals(RAYDIUM_AMM_PROGRAM_ID)
                 );
             });
-            if (!raydiumInstruction) {
-                console.log('No Raydium instruction found');
-                return null;
-            }
+            
+            if (!raydiumInstruction) return null;
 
             const getAccountFromIndex = (index: number): PublicKey => {
                 const account = accounts[index];
@@ -897,7 +727,7 @@ export class TransactionMonitor extends EventEmitter {
 
             const keys = raydiumInstruction.accounts;
             const poolCoinTokenAccount = getAccountFromIndex(keys[5]);
-            const tokenAddress = poolCoinTokenAccount; // For logging
+            const tokenAddress = poolCoinTokenAccount;
 
             const poolAccounts: RaydiumSwapData = {
                 swapType: SwapType.RAYDIUM,
@@ -920,16 +750,10 @@ export class TransactionMonitor extends EventEmitter {
                 serumOpenOrders: getAccountFromIndex(keys[14])
             };
 
-            console.log('Extracted Raydium pool accounts:', {
-                ammId: poolAccounts.ammId.toString(),
-                market: poolAccounts.serumMarket.toString(),
-                coinAccount: poolAccounts.poolCoinTokenAccount.toString(),
-                pcAccount: poolAccounts.poolPcTokenAccount.toString()
-            });
-
             return poolAccounts;
+
         } catch (error) {
-            console.error('Error extracting pool accounts:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error extracting pool accounts:'), error);
             return null;
         }
     }
@@ -985,7 +809,6 @@ export class TransactionMonitor extends EventEmitter {
 
                 const coinPreBalance = preBalances.find(b => b.accountIndex === poolCoinIndex);
                 const coinPostBalance = postBalances.find(b => b.accountIndex === poolCoinIndex);
-
                 const pcPreBalance = preBalances.find(b => b.accountIndex === poolPcIndex);
                 const pcPostBalance = postBalances.find(b => b.accountIndex === poolPcIndex);
 
@@ -1005,17 +828,6 @@ export class TransactionMonitor extends EventEmitter {
                 }
             }
 
-            console.log('Extracted Swap Details:', {
-                userAccounts: Array.from(accountBalances.entries()).map(([index, data]) => ({ index, ...data })),
-                poolBalances,
-                accountExists: {
-                    hasSourceAccount: accountBalances.has(poolAccounts.poolCoinTokenAccount.toString()),
-                    hasDestAccount: accountBalances.has(poolAccounts.poolPcTokenAccount.toString())
-                },
-                poolCoinTokenAccount: poolAccounts.poolCoinTokenAccount.toString(),
-                poolPcTokenAccount: poolAccounts.poolPcTokenAccount.toString()
-            });
-
             return {
                 userAccounts: accountBalances,
                 poolBalances,
@@ -1026,8 +838,9 @@ export class TransactionMonitor extends EventEmitter {
                     hasDestAccount: accountBalances.has(poolAccounts.poolPcTokenAccount.toString())
                 }
             };
+
         } catch (error) {
-            console.error('Error extracting swap details:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error extracting swap details:'), error);
             return null;
         }
     }
@@ -1038,15 +851,7 @@ export class TransactionMonitor extends EventEmitter {
     private calculateTokenChanges(
         preBalances: TokenBalance[],
         postBalances: TokenBalance[]
-    ): {
-        tokenMint: PublicKey;
-        tokenIn: string;
-        tokenOut: string;
-        amountIn?: number;
-        amountOut?: number;
-        decimalsIn?: number;
-        decimalsOut?: number;
-    } | null {
+    ) {
         try {
             const changes = new Map<
                 string,
@@ -1070,10 +875,7 @@ export class TransactionMonitor extends EventEmitter {
             }
 
             const tokenEntry = Array.from(changes.entries()).find(([mint]) => mint !== NATIVE_MINT.toString());
-            if (!tokenEntry) {
-                console.log('Failed to identify token mint');
-                return null;
-            }
+            if (!tokenEntry) return null;
 
             const [mint, data] = tokenEntry;
             const tokenMint = new PublicKey(mint);
@@ -1095,8 +897,9 @@ export class TransactionMonitor extends EventEmitter {
                 decimalsIn: isBuy ? wsol?.decimals : token?.decimals,
                 decimalsOut: isBuy ? token?.decimals : wsol?.decimals
             };
+
         } catch (error) {
-            console.error('Error calculating token changes:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error calculating token changes:'), error);
             return null;
         }
     }
@@ -1115,25 +918,11 @@ export class TransactionMonitor extends EventEmitter {
         const coinChange = poolBalances.coin.post - poolBalances.coin.pre;
         const pcChange = poolBalances.pc.post - poolBalances.pc.pre;
 
-        console.log('Pool Changes:', {
-            coinChange,
-            pcChange,
-            poolBalances
-        });
+        if (coinChange < 0 && pcChange > 0) return 'sell';
+        if (coinChange > 0 && pcChange < 0) return 'buy';
 
-        if (coinChange < 0 && pcChange > 0) {
-            console.log('Detected SELL: Token balance decreased, SOL increased');
-            return 'sell';
-        } else if (coinChange > 0 && pcChange < 0) {
-            console.log('Detected BUY: Token balance increased, SOL decreased');
-            return 'buy';
-        }
-
-        // Fallback using user’s wallet WSOL
         const wsolChanges = this.calculateTokenChange(preBalances, postBalances, NATIVE_MINT.toString());
-        const result = wsolChanges < 0 ? 'buy' : 'sell';
-        console.log(`Fallback direction detection used: ${result}`);
-        return result;
+        return wsolChanges < 0 ? 'buy' : 'sell';
     }
 
     private calculateTokenChange(
@@ -1171,18 +960,20 @@ export class TransactionMonitor extends EventEmitter {
             }
             return undefined;
         } catch (error) {
-            console.error('Error extracting wallet address:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error extracting wallet address:'), error);
             return undefined;
         }
     }
 
     public addWallet(address: string): void {
         if (!address.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
-            throw new Error(`Invalid wallet address: ${address}`);
+            throw new Error(chalk.hex(COLORS.ERROR)(`Invalid wallet address: ${address}`));
         }
         if (!this.config.wallets.includes(address)) {
             this.config.wallets.push(address);
+            this.walletSet.add(address);
             if (this.status.isActive) {
+                console.log(chalk.hex(COLORS.PRIMARY)('Restarting monitor to include new wallet...'));
                 this.stop().then(() => this.start());
             }
         }
@@ -1192,7 +983,9 @@ export class TransactionMonitor extends EventEmitter {
         const index = this.config.wallets.indexOf(address);
         if (index !== -1) {
             this.config.wallets.splice(index, 1);
+            this.walletSet.delete(address);
             if (this.status.isActive) {
+                console.log(chalk.hex(COLORS.PRIMARY)('Restarting monitor after wallet removal...'));
                 this.stop().then(() => this.start());
             }
         }

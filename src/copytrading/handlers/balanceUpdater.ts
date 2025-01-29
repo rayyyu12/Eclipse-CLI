@@ -2,11 +2,12 @@ import { EventEmitter } from "events";
 import { default as Client } from "@triton-one/yellowstone-grpc";
 import { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc";
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import chalk = require("chalk");
+import chalk from "chalk";
+import { COLORS } from "../../cli/config";
 
 interface BalanceMonitorConfig {
-    grpcEndpoint: string;   // For subscription
-    rpcEndpoint: string;    // For initial balance check
+    grpcEndpoint: string;
+    rpcEndpoint: string;
     xToken?: string;
     commitment?: CommitmentLevel;
     wallet: string;
@@ -54,7 +55,7 @@ export class BalanceMonitor extends EventEmitter {
 
     public static getInstance(): BalanceMonitor {
         if (!BalanceMonitor.instance) {
-            throw new Error("Balance Monitor not initialized. Call initialize first.");
+            throw new Error(chalk.hex(COLORS.ERROR)("Balance Monitor not initialized. Call initialize first."));
         }
         return BalanceMonitor.instance;
     }
@@ -63,20 +64,22 @@ export class BalanceMonitor extends EventEmitter {
         if (!BalanceMonitor.instance) {
             BalanceMonitor.instance = new BalanceMonitor(config);
             
-            // Use regular RPC for initial balance
+            // Remove this log
+            // console.log(chalk.hex(COLORS.PRIMARY)('Initializing balance monitor...'));
             const connection = new Connection(config.rpcEndpoint);
             const initialBalance = await connection.getBalance(new PublicKey(config.wallet));
             BalanceMonitor.instance.status.currentBalance = initialBalance / LAMPORTS_PER_SOL;
             
-            // Start subscription using gRPC
             await BalanceMonitor.instance.start();
+            // Remove this log
+            // console.log(chalk.hex(COLORS.SUCCESS)('Balance monitor initialized'));
         }
         return BalanceMonitor.instance;
     }
 
     public async start(): Promise<void> {
         if (this.status.isActive) {
-            console.warn('Balance Monitor is already running');
+            console.warn(chalk.hex(COLORS.ERROR)('Balance Monitor is already running'));
             return;
         }
 
@@ -86,7 +89,7 @@ export class BalanceMonitor extends EventEmitter {
             this.emit('started', this.status);
             this.setupReconnection();
         } catch (error) {
-            console.error('Error starting balance monitor:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error starting balance monitor:'), error);
             this.emit('error', {
                 type: 'STARTUP_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown startup error',
@@ -126,7 +129,7 @@ export class BalanceMonitor extends EventEmitter {
             });
 
             this.subscription.on('error', (error: Error) => {
-                console.error('Stream error:', error);
+                console.error(chalk.hex(COLORS.ERROR)('Stream error:'), error);
                 this.emit('error', {
                     type: 'SUBSCRIPTION_ERROR',
                     message: error.message,
@@ -137,9 +140,10 @@ export class BalanceMonitor extends EventEmitter {
             await new Promise<void>((resolve, reject) => {
                 this.subscription.write(request, (err: Error | null) => {
                     if (err) {
-                        console.error('Error writing subscription:', err);
+                        console.error(chalk.hex(COLORS.ERROR)('Error writing subscription:'), err);
                         reject(err);
                     } else {
+                        console.log(chalk.hex(COLORS.SUCCESS)('Balance subscription active'));
                         resolve();
                     }
                 });
@@ -148,16 +152,14 @@ export class BalanceMonitor extends EventEmitter {
             this.setupPingInterval();
 
         } catch (error) {
-            console.error('Error in connection process:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error in connection process:'), error);
             throw error;
         }
     }
 
     private handleAccountUpdate(accountData: any): void {
         try {
-            if (!accountData?.account?.lamports) {
-                return;
-            }
+            if (!accountData?.account?.lamports) return;
     
             const newBalance = Number(accountData.account.lamports) / LAMPORTS_PER_SOL;
             const oldBalance = this.status.currentBalance;
@@ -175,16 +177,17 @@ export class BalanceMonitor extends EventEmitter {
                     slot: this.status.lastUpdateSlot
                 });
     
-                // Keep only this one clean log
-                console.log(chalk.cyan('\nBalance Update:'));
-                console.log(chalk.white(`Wallet: ${this.config.wallet}`));
-                console.log(chalk.white(`Old Balance: ${oldBalance.toFixed(9)} SOL`));
-                console.log(chalk.white(`New Balance: ${newBalance.toFixed(9)} SOL`));
-                console.log(chalk.white(`Change: ${(newBalance - oldBalance).toFixed(9)} SOL`));
-                console.log(chalk.gray(`Slot: ${this.status.lastUpdateSlot}`));
+                const change = newBalance - oldBalance;
+                const changeColor = change >= 0 ? COLORS.SUCCESS : COLORS.ERROR;
+                
+                console.log(chalk.hex(COLORS.PRIMARY)('\nBalance Update:'));
+                console.log(`Wallet: ${this.config.wallet.slice(0, 4)}...${this.config.wallet.slice(-4)}`);
+                console.log(`Old Balance: ${oldBalance.toFixed(4)} SOL`);
+                console.log(`New Balance: ${newBalance.toFixed(4)} SOL`);
+                console.log(chalk.hex(changeColor)(`Change: ${change.toFixed(4)} SOL`));
             }
         } catch (error) {
-            console.error('Error processing account update:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error processing account update:'), error);
             this.emit('error', {
                 type: 'UPDATE_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown update error',
@@ -202,7 +205,7 @@ export class BalanceMonitor extends EventEmitter {
             if (this.status.lastUpdateTime) {
                 const lastUpdateAge = Date.now() - this.status.lastUpdateTime.getTime();
                 if (lastUpdateAge > this.PING_INTERVAL_MS * 2) {
-                    console.warn(`No balance updates received for ${Math.round(lastUpdateAge / 1000)}s`);
+                    console.warn(chalk.hex(COLORS.ERROR)(`No balance updates received for ${Math.round(lastUpdateAge / 1000)}s`));
                     this.attemptReconnect();
                 }
             }
@@ -211,12 +214,12 @@ export class BalanceMonitor extends EventEmitter {
 
     private setupReconnection(): void {
         this.subscription.on('end', () => {
-            console.warn('Subscription ended unexpectedly');
+            console.warn(chalk.hex(COLORS.ERROR)('Subscription ended unexpectedly'));
             this.attemptReconnect();
         });
 
         this.subscription.on('close', () => {
-            console.warn('Subscription closed unexpectedly');
+            console.warn(chalk.hex(COLORS.ERROR)('Subscription closed unexpectedly'));
             this.attemptReconnect();
         });
     }
@@ -225,7 +228,7 @@ export class BalanceMonitor extends EventEmitter {
         if (!this.status.isActive) return;
 
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.error('Max reconnection attempts reached');
+            console.error(chalk.hex(COLORS.ERROR)('Max reconnection attempts reached'));
             this.emit('error', {
                 type: 'MAX_RECONNECT_ERROR',
                 message: 'Failed to reconnect after maximum attempts',
@@ -236,14 +239,14 @@ export class BalanceMonitor extends EventEmitter {
         }
 
         this.reconnectAttempts++;
-        console.log(`Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
+        console.log(chalk.hex(COLORS.PRIMARY)(`Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`));
 
         try {
             await this.connect();
             this.reconnectAttempts = 0;
-            console.log('Successfully reconnected');
+            console.log(chalk.hex(COLORS.SUCCESS)('Successfully reconnected'));
         } catch (error) {
-            console.error('Reconnection attempt failed:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Reconnection attempt failed:'), error);
             setTimeout(() => this.attemptReconnect(), 5000);
         }
     }
@@ -257,9 +260,7 @@ export class BalanceMonitor extends EventEmitter {
     }
 
     public async stop(): Promise<void> {
-        if (!this.status.isActive) {
-            return;
-        }
+        if (!this.status.isActive) return;
 
         try {
             if (this.pingInterval) {
@@ -274,9 +275,10 @@ export class BalanceMonitor extends EventEmitter {
 
             this.status.isActive = false;
             this.emit('stopped', this.status);
+            console.log(chalk.hex(COLORS.PRIMARY)('Balance monitor stopped'));
 
         } catch (error) {
-            console.error('Error stopping monitor:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Error stopping monitor:'), error);
             throw error;
         }
     }

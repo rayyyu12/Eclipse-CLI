@@ -19,7 +19,7 @@ export async function handleCopyTrade(): Promise<void> {
     while (true) {
         console.clear();
         const header = "Copy Trading Menu";
-        const divider = "—".repeat(30);
+        const divider = "â€”".repeat(30);
         
         console.log(chalk.hex(COLORS.PRIMARY)(`\n${header}`));
         console.log(chalk.hex(COLORS.SECONDARY)(divider));

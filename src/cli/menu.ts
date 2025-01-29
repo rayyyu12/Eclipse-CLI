@@ -7,10 +7,53 @@ import { handleSell } from './handlers/sellHandler';
 import { handlePositions } from './handlers/positionsHandler';
 import { handleSettings } from './handlers/settingsHandler';
 import { handleCopyTrade } from './handlers/copyTradeHandler';
+import { CredentialsManager } from './utils/credentialsManager';
+
+const credentialsManager = CredentialsManager.getInstance();
+
+async function checkRpcUrl(): Promise<boolean> {
+    try {
+        credentialsManager.getRpcUrl();
+        return true;
+    } catch {
+        console.log(chalk.hex(COLORS.ERROR)('Please set RPC URL in settings first'));
+        return false;
+    }
+}
+
+async function checkPrivateKey(): Promise<boolean> {
+    try {
+        credentialsManager.getPrivateKey();
+        return true;
+    } catch {
+        console.log(chalk.hex(COLORS.ERROR)('Please set private key in settings first'));
+        return false;
+    }
+}
+
+async function checkCopyTradeRequirements(): Promise<boolean> {
+    let hasRequirements = true;
+    
+    try {
+        credentialsManager.getRpcUrl();
+    } catch {
+        console.log(chalk.hex(COLORS.ERROR)('Please set RPC URL in settings'));
+        hasRequirements = false;
+    }
+    
+    try {
+        credentialsManager.getGrpcUrl();
+    } catch {
+        console.log(chalk.hex(COLORS.ERROR)('Please set GRPC URL in settings'));
+        hasRequirements = false;
+    }
+    
+    return hasRequirements;
+}
 
 export function displayMenu(): void {
     console.clear();
-    console.log(chalk.hex(COLORS.PRIMARY).bold(ASCII_BANNER));
+    console.log(chalk.hex(COLORS.LOGO).bold(ASCII_BANNER));
     console.log(chalk.hex(COLORS.SECONDARY)("—".repeat(CONFIG.MENU_WIDTH)));
     console.log(chalk.white("1. ") + chalk.hex(COLORS.ACCENT)("Buy"));
     console.log(chalk.white("2. ") + chalk.hex(COLORS.ACCENT)("Sell"));
@@ -28,29 +71,49 @@ export async function handleMenuChoice(choice: string): Promise<boolean> {
     
     switch (choice) {
         case CONFIG.COMMANDS.BUY:
-            await handleBuy();
+            if (await checkRpcUrl()) {
+                await handleBuy();
+            }
             break;
+            
         case CONFIG.COMMANDS.SELL:
-            await handleSell();
+            if (await checkRpcUrl()) {
+                await handleSell();
+            }
             break;
+            
         case CONFIG.COMMANDS.POSITIONS:
-            await handlePositions();
+            if (await checkPrivateKey()) {
+                await handlePositions();
+            }
             break;
+            
         case CONFIG.COMMANDS.BALANCE:
-            console.log(chalk.yellow("Balance feature coming soon..."));
+            if (await checkPrivateKey()) {
+                console.log(chalk.yellow("Balance feature coming soon..."));
+            }
             break;
+            
         case CONFIG.COMMANDS.TRANSFER:
-            console.log(chalk.yellow("Transfer feature coming soon..."));
+            if (await checkPrivateKey()) {
+                console.log(chalk.yellow("Transfer feature coming soon..."));
+            }
             break;
+            
         case CONFIG.COMMANDS.COPY_TRADE:
-            await handleCopyTrade();
+            if (await checkCopyTradeRequirements()) {
+                await handleCopyTrade();
+            }
             break;
+            
         case CONFIG.COMMANDS.SETTINGS:
             await handleSettings();
             break;
+            
         case CONFIG.COMMANDS.EXIT:
             console.log(chalk.hex(COLORS.SUCCESS)("Goodbye!"));
             return false;
+            
         default:
             console.log(chalk.red("Invalid option"));
     }

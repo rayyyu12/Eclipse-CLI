@@ -35,6 +35,8 @@ import { BlockhashManager } from "../../../utils/swaps/blockhashManager";
 import { PortfolioTracker } from "../../../utils/positions/portfolioTracker";
 import { PumpSwapData } from "../../types/types";
 import { CopyTradeSettingsManager } from "../../../cli/utils/copyTradingSettings";
+import chalk from "chalk";
+import { COLORS } from "../../../cli/config";
 
 // We add performance measurement from Node's perf_hooks
 import { performance } from 'perf_hooks';
@@ -52,6 +54,7 @@ function deriveInstructionDiscriminator(nameSpace: string, ixName: string): Buff
 
 const BUY_IX_DISCRIMINATOR = deriveInstructionDiscriminator('global', 'buy');
 const SELL_IX_DISCRIMINATOR = deriveInstructionDiscriminator('global', 'sell');
+const DEFAULT_PRIORITY_FEE = 100_000;
 
 async function handlePostTradePortfolioUpdate(
     connection: Connection,
@@ -63,20 +66,17 @@ async function handlePostTradePortfolioUpdate(
     isBuy: boolean
 ): Promise<void> {
     try {
-        // Wait for transaction confirmation first
         const confirmation = await connection.confirmTransaction(signature);
         if (confirmation.value.err) {
             throw new Error('Transaction failed');
         }
 
-        // Get token balance after confirmed swap
         const tokenAccount = await connection.getParsedTokenAccountsByOwner(
             wallet.publicKey,
             { mint: swapData.tokenAddress }
         );
         const currentBalance = tokenAccount.value[0]?.account.data.parsed.info.tokenAmount.uiAmount || 0;
 
-        // Update portfolio tracker
         const portfolioTracker = PortfolioTracker.getInstance();
         
         if (isBuy) {
@@ -85,9 +85,7 @@ async function handlePostTradePortfolioUpdate(
                 amountIn / LAMPORTS_PER_SOL,
                 currentBalance,
                 signature,
-                {
-                    isPumpToken: true
-                }
+                { isPumpToken: true }
             );
         } else {
             await portfolioTracker.addPosition(
@@ -95,14 +93,16 @@ async function handlePostTradePortfolioUpdate(
                 -(amountIn / LAMPORTS_PER_SOL),
                 -Math.abs(currentBalance),
                 signature,
-                {
-                    isPumpToken: true
-                }
+                { isPumpToken: true }
             );
         }
 
+        console.log(chalk.hex(COLORS.SUCCESS)('\nPortfolio update successful:'));
+        console.log(`Token: ${swapData.tokenAddress.toString()}`);
+        console.log(`Balance: ${currentBalance.toFixed(6)}`);
+
     } catch (error) {
-        console.error('Error updating portfolio after trade:', error);
+        console.error(chalk.hex(COLORS.ERROR)('Portfolio update failed:'), error);
     }
 }
 
@@ -111,7 +111,7 @@ async function buildPumpSellInstruction(
     wallet: PublicKey,
     tokenAccount: PublicKey,
     mint: PublicKey,
-    coinData: any,
+    coinData: CoinData,
     amount: BN,
     minSolOutput: BN
 ): Promise<TransactionInstruction> {
@@ -136,11 +136,7 @@ async function buildPumpSellInstruction(
         { pubkey: PUMP_FUN_PROGRAM_ID, isSigner: false, isWritable: false }
     ];
 
-    return new TransactionInstruction({
-        programId: PUMP_FUN_PROGRAM_ID,
-        keys,
-        data
-    });
+    return new TransactionInstruction({ programId: PUMP_FUN_PROGRAM_ID, keys, data });
 }
 
 // Add copy sell function
@@ -152,21 +148,19 @@ export async function copyPumpSellSwap(
     slippageTolerance: number = 0.10
 ): Promise<string> {
     const overallStart = performance.now();
-    console.log("\nInitiating pump.fun copy SELL...");
+    console.log(chalk.hex(COLORS.PRIMARY)('\nInitiating pump.fun sell...'));
 
     try {
         // Step 1: Derive PDAs
-        const step1Start = performance.now();
         const bondingCurvePk = deriveBondingCurvePda(swapData.tokenAddress);
         const associatedBondingCurvePk = await deriveAssociatedBondingCurvePda(swapData.tokenAddress);
-        console.log(`Step 1 took ${(performance.now() - step1Start).toFixed(2)} ms`);
 
         // Step 2: Read bonding curve
-        const step2Start = performance.now();
         const curveData = await readBondingCurveAccount(connection, bondingCurvePk);
         if (curveData.completed) {
-            throw new Error("Token has migrated from pump.fun, can't sell.");
+            throw new Error("Token has migrated from pump.fun");
         }
+
         const coinData = {
             bonding_curve: bondingCurvePk.toBase58(),
             associated_bonding_curve: associatedBondingCurvePk.toBase58(),
@@ -174,49 +168,34 @@ export async function copyPumpSellSwap(
             virtual_sol_reserves: curveData.virtual_sol_reserves,
             completed: curveData.completed
         };
-        console.log(`Step 2 took ${(performance.now() - step2Start).toFixed(2)} ms`);
 
         // Step 3: Get user token account
-        const step3Start = performance.now();
         const userTokenAccount = await getAssociatedTokenAddress(
             swapData.tokenAddress,
             wallet.publicKey
         );
-        console.log(`Step 3 took ${(performance.now() - step3Start).toFixed(2)} ms`);
 
         // Step 4: Get blockhash and fees
-        const step4Start = performance.now();
         const { blockhash, lastValidBlockHeight } = await BlockhashManager.getInstance().getBlockhash();
-        
         const settings = SettingsManager.getInstance().getSettings();
-        const DEFAULT_PRIORITY_FEE = 100_000;
         const priorityFeeEstimate = settings.fees.fixedPriorityFee || DEFAULT_PRIORITY_FEE;
-        console.log(`Step 4 took ${(performance.now() - step4Start).toFixed(2)} ms`);
 
         // Step 5: Calculate expected output
-        const step5Start = performance.now();
         const amountBN = new BN(tokenAmount.toString());
         const expectedOutput = calculateExpectedSolOutput(amountBN, coinData);
         const minSolOutput = expectedOutput.muln(Math.floor((1 - slippageTolerance) * 1000)).divn(1000);
-        console.log(`Step 5 took ${(performance.now() - step5Start).toFixed(2)} ms`);
 
-        // Step 6: Build transaction
-        const step6Start = performance.now();
-        const instructions: TransactionInstruction[] = [];
+        console.log(chalk.hex(COLORS.PRIMARY)('\nSell Parameters:'));
+        console.log(`Amount In: ${tokenAmount} Tokens`);
+        console.log(`Expected Output: ${(expectedOutput.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+        console.log(`Min Output: ${(minSolOutput.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+        console.log(`Slippage: ${(slippageTolerance * 100).toFixed(2)}%`);
 
-        // Compute units and priority fee
-        const computeUnits = 200_000;
-        instructions.push(
-            ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits }),
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate })
-        );
-
-        // Jito tip
-        const jitoTip = await prepareJitoTip(priorityFeeEstimate, wallet.publicKey, false);
-        instructions.push(jitoTip);
-
-        // Sell instruction
-        instructions.push(
+        // Step 6: Build instructions
+        const instructions = [
+            ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate }),
+            await prepareJitoTip(priorityFeeEstimate, wallet.publicKey, false),
             await buildPumpSellInstruction(
                 wallet.publicKey,
                 userTokenAccount,
@@ -225,8 +204,9 @@ export async function copyPumpSellSwap(
                 amountBN,
                 minSolOutput
             )
-        );
+        ];
 
+        // Step 7: Build and send transaction
         const messageV0 = new TransactionMessage({
             payerKey: wallet.publicKey,
             recentBlockhash: blockhash,
@@ -235,25 +215,22 @@ export async function copyPumpSellSwap(
 
         const transaction = new VersionedTransaction(messageV0);
         transaction.sign([wallet]);
-        console.log(`Step 6 took ${(performance.now() - step6Start).toFixed(2)} ms`);
 
-        // Step 7: Send and confirm
-        const step7Start = performance.now();
-        console.log('Sending transaction...');
+        console.log(chalk.hex(COLORS.PRIMARY)('\nSending transaction...'));
         const signature = await sendJitoTransaction(transaction, { skipPreflight: true });
 
-        await connection.confirmTransaction(
-            {
-                signature,
-                blockhash,
-                lastValidBlockHeight
-            },
-            "processed"
-        );
-        console.log(`Step 7 took ${(performance.now() - step7Start).toFixed(2)} ms`);
+        console.log(chalk.hex(COLORS.PRIMARY)('Awaiting confirmation...'));
+        await connection.confirmTransaction({
+            signature,
+            blockhash,
+            lastValidBlockHeight
+        }, "processed");
+
+        console.log(chalk.hex(COLORS.SUCCESS)('\nTransaction successful!'));
+        console.log(`Signature: ${chalk.hex(COLORS.ACCENT)(signature)}`);
+        console.log(`Explorer: ${chalk.hex(COLORS.ACCENT)(`https://solscan.io/tx/${signature}`)}`);
 
         // Update portfolio
-        const postMetricsStart = performance.now();
         await handlePostTradePortfolioUpdate(
             connection,
             wallet,
@@ -263,25 +240,22 @@ export async function copyPumpSellSwap(
             userTokenAccount,
             false
         );
-        console.log(`Portfolio update took ${(performance.now() - postMetricsStart).toFixed(2)} ms`);
 
-        console.log(`Overall function time: ${(performance.now() - overallStart).toFixed(2)} ms`);
+        console.log(chalk.hex(COLORS.PRIMARY)(`\nTotal execution time: ${(performance.now() - overallStart).toFixed(2)}ms`));
         return signature;
 
     } catch (error) {
-        console.error('\nTransaction failed:', error);
+        console.error(chalk.hex(COLORS.ERROR)('\nTransaction failed:'), error);
         throw error;
     }
 }
 
 // Calculate expected SOL output for sells
-function calculateExpectedSolOutput(amountIn: BN, coinData: any): BN {
+function calculateExpectedSolOutput(amountIn: BN, coinData: CoinData): BN {
     const virtualTokenReserves = new BN(coinData.virtual_token_reserves);
     const virtualSolReserves = new BN(coinData.virtual_sol_reserves);
-    
     const numerator = virtualSolReserves.mul(amountIn);
     const denominator = virtualTokenReserves.add(amountIn);
-    
     return numerator.div(denominator);
 }
 
@@ -317,7 +291,6 @@ async function readBondingCurveAccount(connection: Connection, bondingCurvePk: P
         throw new Error(`BondingCurve account not found: ${bondingCurvePk}`);
     }
 
-    // Skip 8-byte discriminator
     let offset = 8;
     const data = accountInfo.data;
 
@@ -340,11 +313,7 @@ interface CoinData {
     completed: boolean;
 }
 
-function calculateExpectedOutput(
-    amountInLamports: BN,
-    coinData: CoinData
-): BN {
-    // For BUY: formula = (virtual_token_reserves * amountInLamports) / (virtual_sol_reserves + amountInLamports)
+function calculateExpectedOutput(amountInLamports: BN, coinData: CoinData): BN {
     const virtualTokenReserves = new BN(coinData.virtual_token_reserves);
     const virtualSolReserves = new BN(coinData.virtual_sol_reserves);
     const numerator = virtualTokenReserves.mul(amountInLamports);
@@ -361,7 +330,6 @@ async function buildPumpBuyInstruction(
     expectedOutput: BN,
     maxSolCost: BN
 ): Promise<TransactionInstruction> {
-    // Build the instruction data the same as your original approach
     const data = Buffer.concat([
         BUY_IX_DISCRIMINATOR,
         expectedOutput.toArrayLike(Buffer, 'le', 8),
@@ -383,11 +351,7 @@ async function buildPumpBuyInstruction(
         { pubkey: PUMP_FUN_PROGRAM_ID, isSigner: false, isWritable: false }
     ];
 
-    return new TransactionInstruction({
-        programId: PUMP_FUN_PROGRAM_ID,
-        keys,
-        data
-    });
+    return new TransactionInstruction({ programId: PUMP_FUN_PROGRAM_ID, keys, data });
 }
 
 // --------------------------------------------------------------------
@@ -402,31 +366,20 @@ export async function copyPumpBuySwap(
     const settings = CopyTradeSettingsManager.getInstance().getSettings();
     const slippageTolerance = settings.slippageTolerance.pump / 100;
     const overallStart = performance.now();
-    console.log("\nInitiating pump.fun copy BUY, using on-chain bonding curve...");
-
-    console.log('Swap details from monitored tx:', {
-        originalAmountIn: swapData.amountIn,
-        originalAmountOut: swapData.amountOut,
-        targetAmountIn: amountInLamports / LAMPORTS_PER_SOL
-    });
+    
+    console.log(chalk.hex(COLORS.PRIMARY)('\nInitiating pump.fun buy...'));
 
     try {
         // Step 1: Derive PDAs
-        const step1Start = performance.now();
         const bondingCurvePk = deriveBondingCurvePda(swapData.tokenAddress);
         const associatedBondingCurvePk = await deriveAssociatedBondingCurvePda(swapData.tokenAddress);
-        console.log('Bonding curve PDAs:', {
-            bondingCurvePk: bondingCurvePk.toBase58(),
-            associatedBondingCurvePk: associatedBondingCurvePk.toBase58()
-        });
-        console.log(`Step 1 took ${(performance.now() - step1Start).toFixed(2)} ms`);
 
-        // Step 2: Read the on-chain bonding curve
-        const step2Start = performance.now();
+        // Step 2: Read bonding curve
         const curveData = await readBondingCurveAccount(connection, bondingCurvePk);
         if (curveData.completed) {
-            throw new Error("Token has migrated from pump.fun, can't buy.");
+            throw new Error("Token has migrated from pump.fun");
         }
+
         const coinData: CoinData = {
             bonding_curve: bondingCurvePk.toBase58(),
             associated_bonding_curve: associatedBondingCurvePk.toBase58(),
@@ -434,60 +387,40 @@ export async function copyPumpBuySwap(
             virtual_sol_reserves: curveData.virtual_sol_reserves,
             completed: curveData.completed
         };
-        console.log(`Step 2 took ${(performance.now() - step2Start).toFixed(2)} ms`);
 
-        // Step 3: Prepare user token account
-        const step3Start = performance.now();
+        // Step 3: Get user token account
         const userTokenAccount = await getAssociatedTokenAddress(
             swapData.tokenAddress,
             wallet.publicKey
         );
-        console.log('User token account:', userTokenAccount.toString());
-        console.log(`Step 3 took ${(performance.now() - step3Start).toFixed(2)} ms`);
 
-        // Step 4: Retrieve blockhash and fees
-        const step4Start = performance.now();
+        // Step 4: Get blockhash and fees
         const { blockhash, lastValidBlockHeight } = await BlockhashManager.getInstance().getBlockhash();
-        console.log('Using blockhash:', blockhash);
-
         const settings = SettingsManager.getInstance().getSettings();
-        const DEFAULT_PRIORITY_FEE = 100_000; // remain consistent with your older approach
         const priorityFeeEstimate = settings.fees.fixedPriorityFee || DEFAULT_PRIORITY_FEE;
-        console.log('Priority fee (microLamports/compute-unit):', priorityFeeEstimate);
-        console.log(`Step 4 took ${(performance.now() - step4Start).toFixed(2)} ms`);
 
-        // Step 5: Calculate expected output and maxSolCost from on-chain reserves
-        const step5Start = performance.now();
+        // Step 5: Calculate expected output
         const ourSolAmountBN = new BN(amountInLamports.toString());
         const expectedOutputBN = calculateExpectedOutput(ourSolAmountBN, coinData);
         const maxSolCostBN = ourSolAmountBN.muln(Math.floor((1 + slippageTolerance) * 1000)).divn(1000);
 
-        console.log('Swap math:', {
-            amountInLamports,
-            amountInSOL: amountInLamports / LAMPORTS_PER_SOL,
-            expectedOutputBN: expectedOutputBN.toString(),
-            maxSolCostBN: maxSolCostBN.toString(),
-            slippageTolerance
-        });
-        console.log(`Step 5 took ${(performance.now() - step5Start).toFixed(2)} ms`);
+        console.log(chalk.hex(COLORS.PRIMARY)('\nSwap Parameters:'));
+        console.log(`Amount In: ${(amountInLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+        console.log(`Expected Output: ${expectedOutputBN.toString()}`);
+        console.log(`Max Cost: ${(maxSolCostBN.toNumber() / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+        console.log(`Slippage: ${(slippageTolerance * 100).toFixed(2)}%`);
 
-        // Step 6: Build transaction instructions
-        const step6Start = performance.now();
-        const transactionInstructions: TransactionInstruction[] = [];
-
-        // Instead of checking if the account exists, we create or verify ATA idempotently:
-        console.log('Creating or verifying associated token account (idempotent)...');
-        transactionInstructions.push(
+        // Step 6: Build instructions
+        const instructions = [
+            ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate }),
+            await prepareJitoTip(priorityFeeEstimate, wallet.publicKey, false),
             createAssociatedTokenAccountIdempotentInstruction(
                 wallet.publicKey,
                 userTokenAccount,
                 wallet.publicKey,
                 swapData.tokenAddress
-            )
-        );
-
-        // Pump.fun BUY
-        transactionInstructions.push(
+            ),
             await buildPumpBuyInstruction(
                 wallet.publicKey,
                 userTokenAccount,
@@ -496,83 +429,48 @@ export async function copyPumpBuySwap(
                 expectedOutputBN,
                 maxSolCostBN
             )
-        );
-        console.log(`Step 6 took ${(performance.now() - step6Start).toFixed(2)} ms`);
-
-        // Step 7: Build and sign transaction
-        const step7Start = performance.now();
-        // Potentially increase compute units
-        const computeUnits = Math.min(200_000 * transactionInstructions.length, 1_400_000);
-        console.log(`Compute units for transaction: ${computeUnits}`);
-
-        // Priority fee logic
-        const instructions: TransactionInstruction[] = [
-            ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits }),
-            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeEstimate })
         ];
 
-        // Jito tip
-        const jitoTip = await prepareJitoTip(priorityFeeEstimate, wallet.publicKey, false);
-        instructions.push(jitoTip);
-
-        // Add our main transaction instructions
-        instructions.push(...transactionInstructions);
-
-        // Build and sign transaction
+        // Step 7: Build and send transaction
         const messageV0 = new TransactionMessage({
             payerKey: wallet.publicKey,
             recentBlockhash: blockhash,
             instructions
         }).compileToV0Message();
+
         const transaction = new VersionedTransaction(messageV0);
         transaction.sign([wallet]);
-        console.log(`Step 7 took ${(performance.now() - step7Start).toFixed(2)} ms`);
 
-        // Step 8: Send transaction (simulation removed as requested)
-        const step8Start = performance.now();
-        console.log('Sending transaction...');
+        console.log(chalk.hex(COLORS.PRIMARY)('\nSending transaction...'));
         const signature = await sendJitoTransaction(transaction, { skipPreflight: true });
-        console.log(`Transaction sent: ${signature}`);
-        console.log('Awaiting confirmation...');
 
-        await connection.confirmTransaction(
-            {
-                signature,
-                blockhash,
-                lastValidBlockHeight
-            },
-            "processed"
+        console.log(chalk.hex(COLORS.PRIMARY)('Awaiting confirmation...'));
+        await connection.confirmTransaction({
+            signature,
+            blockhash,
+            lastValidBlockHeight
+        }, "processed");
+
+        console.log(chalk.hex(COLORS.SUCCESS)('\nTransaction successful!'));
+        console.log(`Signature: ${chalk.hex(COLORS.ACCENT)(signature)}`);
+        console.log(`Explorer: ${chalk.hex(COLORS.ACCENT)(`https://solscan.io/tx/${signature}`)}`);
+
+        // Update portfolio
+        await handlePostTradePortfolioUpdate(
+            connection,
+            wallet,
+            signature,
+            swapData,
+            amountInLamports,
+            userTokenAccount,
+            true
         );
-        console.log('\nTransaction successful!');
-        console.log(`Explorer link: https://solscan.io/tx/${signature}`);
-        console.log(`Step 8 took ${(performance.now() - step8Start).toFixed(2)} ms`);
 
-        // Optional post-swap metrics
-        const postMetricsStart = performance.now();
-        try {
-            const postTokenAccount = await connection.getParsedTokenAccountsByOwner(
-                wallet.publicKey,
-                { mint: swapData.tokenAddress }
-            );
-            if (postTokenAccount.value[0]?.account.data.parsed.info.tokenAmount) {
-                console.log('Post-swap token balance:', {
-                    amount: postTokenAccount.value[0].account.data.parsed.info.tokenAmount.uiAmount,
-                    decimals: postTokenAccount.value[0].account.data.parsed.info.tokenAmount.decimals
-                });
-            }
-        } catch (err) {
-            console.log('Failed to fetch token info after swap:', err);
-        }
-        console.log(`Fetching post-swap metrics took ${(performance.now() - postMetricsStart).toFixed(2)} ms`);
-
-        console.log(`Overall function time: ${(performance.now() - overallStart).toFixed(2)} ms`);
+        console.log(chalk.hex(COLORS.PRIMARY)(`\nTotal execution time: ${(performance.now() - overallStart).toFixed(2)}ms`));
         return signature;
 
     } catch (error) {
-        console.error('\nTransaction failed:', error);
-        if (error instanceof Error) {
-            console.error('Error details:', error.stack);
-        }
+        console.error(chalk.hex(COLORS.ERROR)('\nTransaction failed:'), error);
         throw error;
     }
 }

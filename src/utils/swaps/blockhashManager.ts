@@ -1,5 +1,7 @@
 //blockhashManager.ts
 import { Connection } from "@solana/web3.js";
+import chalk = require("chalk");
+import { COLORS } from "../../cli/config";
 
 interface BlockhashInfo {
     blockhash: string;
@@ -60,7 +62,7 @@ export class BlockhashManager {
 
     public async getBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
         if (!this.connection) {
-            throw new Error("BlockhashManager not initialized");
+            throw new Error(chalk.hex(COLORS.ERROR)("BlockhashManager not initialized"));
         }
 
         // If we have a recent blockhash, use it
@@ -75,7 +77,7 @@ export class BlockhashManager {
         // If blockhash is too old or doesn't exist, fetch a new one
         await this.updateBlockhash();
         if (!this.currentBlockhashInfo) {
-            throw new Error("Failed to get blockhash");
+            throw new Error(chalk.hex(COLORS.ERROR)("Failed to get blockhash"));
         }
 
         return {

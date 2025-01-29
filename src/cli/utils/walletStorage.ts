@@ -1,5 +1,6 @@
-// src/cli/utils/walletStorage.ts
 import { SecureStorage } from './secureStorage';
+import chalk from 'chalk';
+import { COLORS } from '../config';
 
 export class WalletStorage {
     private static instance: WalletStorage;
@@ -18,42 +19,78 @@ export class WalletStorage {
     }
 
     public getWallets(): Set<string> {
-        const credentials = this.secureStorage.getCredentials();
         try {
-            console.log('Debug: Raw credentials:', credentials);
+            const credentials = this.secureStorage.getCredentials();
             const walletsString = credentials[this.STORAGE_KEY];
-            console.log('Debug: Stored wallets string:', walletsString);
-            if (!walletsString) return new Set<string>();
+            
+            if (!walletsString) {
+                return new Set<string>();
+            }
+
             const parsedWallets = JSON.parse(walletsString);
-            console.log('Debug: Parsed wallets:', parsedWallets);
+            if (!Array.isArray(parsedWallets)) {
+                throw new Error('Invalid stored wallet format');
+            }
+
             return new Set<string>(parsedWallets);
         } catch (error) {
-            console.error('Error parsing stored wallets:', error);
+            console.error(chalk.hex(COLORS.ERROR)('Failed to retrieve wallets:'), error);
             return new Set<string>();
         }
     }
 
     public saveWallets(wallets: Set<string>): void {
-        console.log('Debug: Saving wallets:', Array.from(wallets));
-        const walletsArray = Array.from(wallets);
-        const walletsString = JSON.stringify(walletsArray);
-        console.log('Debug: Saving wallets string:', walletsString);
-        this.secureStorage.updateCredential(this.STORAGE_KEY, walletsString);
+        try {
+            const walletsArray = Array.from(wallets);
+            const walletsString = JSON.stringify(walletsArray);
+            this.secureStorage.updateCredential(this.STORAGE_KEY, walletsString);
+        } catch (error) {
+            console.error(chalk.hex(COLORS.ERROR)('Failed to save wallets:'), error);
+            throw error;
+        }
     }
 
     public addWallet(wallet: string): void {
-        const wallets = this.getWallets();
-        wallets.add(wallet);
-        this.saveWallets(wallets);
+        try {
+            const wallets = this.getWallets();
+            if (wallets.has(wallet)) {
+                console.log(chalk.hex(COLORS.PRIMARY)('Wallet already monitored:', wallet));
+                return;
+            }
+            
+            wallets.add(wallet);
+            this.saveWallets(wallets);
+            console.log(chalk.hex(COLORS.SUCCESS)('Wallet added successfully:', wallet));
+        } catch (error) {
+            console.error(chalk.hex(COLORS.ERROR)('Failed to add wallet:'), error);
+            throw error;
+        }
     }
 
     public removeWallet(wallet: string): void {
-        const wallets = this.getWallets();
-        wallets.delete(wallet);
-        this.saveWallets(wallets);
+        try {
+            const wallets = this.getWallets();
+            if (!wallets.has(wallet)) {
+                console.log(chalk.hex(COLORS.PRIMARY)('Wallet not found:', wallet));
+                return;
+            }
+            
+            wallets.delete(wallet);
+            this.saveWallets(wallets);
+            console.log(chalk.hex(COLORS.SUCCESS)('Wallet removed successfully:', wallet));
+        } catch (error) {
+            console.error(chalk.hex(COLORS.ERROR)('Failed to remove wallet:'), error);
+            throw error;
+        }
     }
 
     public clearWallets(): void {
-        this.secureStorage.updateCredential(this.STORAGE_KEY, undefined);
+        try {
+            this.secureStorage.updateCredential(this.STORAGE_KEY, undefined);
+            console.log(chalk.hex(COLORS.SUCCESS)('All wallets cleared successfully'));
+        } catch (error) {
+            console.error(chalk.hex(COLORS.ERROR)('Failed to clear wallets:'), error);
+            throw error;
+        }
     }
 }
