@@ -23,6 +23,7 @@ import { PortfolioTracker } from '../../utils/positions/portfolioTracker';
 import { deriveInstructionDiscriminator } from '../../utils/swaps/pumpSwap';
 import { CopyTradeSettingsManager, BuyMode } from "../../cli/utils/copyTradingSettings";
 import { COLORS } from "../../cli/config";
+import { CopyTradeLogger } from "../../cli/utils/copyTradeLogger";
 
 // Import interfaces from existing document...
 interface MonitorStatus {
@@ -86,6 +87,7 @@ export class TransactionMonitor extends EventEmitter {
     private readonly MAX_PROCESSED_TRANSACTIONS = 1000;
     private walletSet: Set<string>;
     private processedTransactions: Set<string> = new Set();
+    private logger: CopyTradeLogger;
 
     constructor(config: {
         grpcEndpoint: string;
@@ -98,6 +100,7 @@ export class TransactionMonitor extends EventEmitter {
         super();
         this.config = config;
         this.walletSet = new Set(config.wallets);
+        this.logger = CopyTradeLogger.getInstance();
         this.status = {
             isActive: false,
             processedTransactions: 0,
@@ -455,10 +458,15 @@ export class TransactionMonitor extends EventEmitter {
                 throw new Error('Raydium trading is disabled in settings');
             }
 
-            console.log(chalk.hex(COLORS.PRIMARY)('\nExecuting copy trade...'));
-            console.log(`Original tx: ${chalk.hex(COLORS.ACCENT)(originalSignature)}`);
-            console.log(`Type: ${chalk.hex(COLORS.ACCENT)(swapData.isBuy ? 'BUY' : 'SELL')}`);
-            console.log(`Protocol: ${chalk.hex(COLORS.ACCENT)(swapData.swapType)}`);
+            this.logger.addLog({
+                type: 'info',
+                protocol: swapData.swapType,
+                message: `Executing ${swapData.isBuy ? 'BUY' : 'SELL'} on ${swapData.swapType}`,
+                details: {
+                    originalTx: originalSignature,
+                    tokenAddress: swapData.tokenAddress.toString()
+                }
+            });
 
             let copySignature: string;
 
@@ -481,6 +489,13 @@ export class TransactionMonitor extends EventEmitter {
                         throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
                     }
 
+                    this.logger.addLog({
+                        type: 'info',
+                        protocol: SwapType.PUMP,
+                        message: `Buying with ${amountInSol} SOL`,
+                        details: { amount: amountInSol, tokenAddress: pumpData.tokenAddress.toString() }
+                    });
+
                     copySignature = await copyPumpBuySwap(connection, wallet, pumpData, amountInLamports);
                 } else {
                     const portfolioTracker = PortfolioTracker.getInstance();
@@ -497,6 +512,14 @@ export class TransactionMonitor extends EventEmitter {
                         }
                         const tokenBalance = accountInfo.value.uiAmount;
                         const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6));
+
+                        this.logger.addLog({
+                            type: 'info',
+                            protocol: SwapType.PUMP,
+                            message: `Selling ${tokenBalance} tokens`,
+                            details: { amount: tokenBalance, tokenAddress: pumpData.tokenAddress.toString() }
+                        });
+
                         copySignature = await copyPumpSellSwap(
                             connection, 
                             wallet, 
@@ -507,6 +530,14 @@ export class TransactionMonitor extends EventEmitter {
                     } else {
                         const tokenBalance = position.remainingValue / position.currentPriceSol;
                         const amountToSell = Math.floor(tokenBalance * Math.pow(10, 6));
+
+                        this.logger.addLog({
+                            type: 'info',
+                            protocol: SwapType.PUMP,
+                            message: `Selling ${tokenBalance} tokens from position`,
+                            details: { amount: tokenBalance, tokenAddress: pumpData.tokenAddress.toString() }
+                        });
+
                         copySignature = await copyPumpSellSwap(
                             connection, 
                             wallet, 
@@ -540,6 +571,13 @@ export class TransactionMonitor extends EventEmitter {
                         throw new Error(`Buy amount ${amountInSol} SOL above maximum ${settings.maxBuyAmount} SOL`);
                     }
 
+                    this.logger.addLog({
+                        type: 'info',
+                        protocol: SwapType.RAYDIUM,
+                        message: `Buying with ${amountInSol} SOL`,
+                        details: { amount: amountInSol, tokenAddress: raydiumData.tokenAddress.toString() }
+                    });
+
                     copySignature = await copyRaydiumSwap(connection, wallet, raydiumData, amountInLamports);
                 } else {
                     const portfolioTracker = PortfolioTracker.getInstance();
@@ -551,6 +589,13 @@ export class TransactionMonitor extends EventEmitter {
 
                     const tokenAmount = position.remainingValue / position.currentPriceSol;
                     const amountToSell = Math.floor(tokenAmount * Math.pow(10, tokenDecimals));
+
+                    this.logger.addLog({
+                        type: 'info',
+                        protocol: SwapType.RAYDIUM,
+                        message: `Selling ${tokenAmount} tokens`,
+                        details: { amount: tokenAmount, tokenAddress: raydiumData.tokenAddress.toString() }
+                    });
 
                     copySignature = await copyRaydiumSwap(
                         connection,
@@ -565,9 +610,18 @@ export class TransactionMonitor extends EventEmitter {
                 }
             }
 
-            console.log(chalk.hex(COLORS.SUCCESS)('\nCopy Trade Success:'));
-            console.log(`Signature: ${chalk.hex(COLORS.ACCENT)(copySignature)}`);
-            console.log(`Explorer: ${chalk.hex(COLORS.SUCCESS)(`https://solscan.io/tx/${copySignature}`)}`);
+            this.logger.addLog({
+                type: 'success',
+                protocol: swapData.swapType,
+                message: 'Copy trade successful',
+                details: {
+                    signature: copySignature,
+                    originalTx: originalSignature,
+                    type: swapData.isBuy ? 'BUY' : 'SELL',
+                    tokenAddress: swapData.tokenAddress.toString(),
+                    explorer: `https://solscan.io/tx/${copySignature}`
+                }
+            });
 
             this.emit('copyTradeSuccess', {
                 originalSignature,
@@ -578,7 +632,16 @@ export class TransactionMonitor extends EventEmitter {
             });
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('\nCopy trade failed:'), error);
+            this.logger.addLog({
+                type: 'error',
+                protocol: swapData.swapType,
+                message: error instanceof Error ? error.message : 'Unknown error',
+                details: {
+                    originalTx: originalSignature,
+                    type: swapData.isBuy ? 'BUY' : 'SELL',
+                    tokenAddress: swapData.tokenAddress.toString()
+                }
+            });
             
             this.emit('copyTradeError', {
                 originalSignature,

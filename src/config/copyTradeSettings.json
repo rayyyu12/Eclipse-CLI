@@ -4,7 +4,7 @@
   "minBuyAmount": 0,
   "maxBuyAmount": 100,
   "enabled": {
-    "pump": false,
+    "pump": true,
     "raydium": true
   },
   "slippageTolerance": {

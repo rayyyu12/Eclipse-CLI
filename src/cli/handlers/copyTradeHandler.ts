@@ -10,16 +10,18 @@ import { BalanceMonitor } from '../../copytrading/handlers/balanceUpdater';
 import { CommitmentLevel } from '@triton-one/yellowstone-grpc';
 import { BlockhashManager } from '../../utils/swaps/blockhashManager';
 import { handleCopyTradeSettings } from './copyTradeSettingsHandler';
+import { CopyTradeLogger } from '../utils/copyTradeLogger';
 import { COLORS } from '../config';
 
 let activeMonitor: TransactionMonitor | null = null;
 const walletStorage = WalletStorage.getInstance();
+const logger = CopyTradeLogger.getInstance();
 
 export async function handleCopyTrade(): Promise<void> {
     while (true) {
         console.clear();
         const header = "Copy Trading Menu";
-        const divider = "â€”".repeat(30);
+        const divider = "—".repeat(30);
         
         console.log(chalk.hex(COLORS.PRIMARY)(`\n${header}`));
         console.log(chalk.hex(COLORS.SECONDARY)(divider));
@@ -41,7 +43,7 @@ export async function handleCopyTrade(): Promise<void> {
                     console.log(chalk.hex(COLORS.PRIMARY)("\nWallet Balances:"));
                     console.log(chalk.hex(COLORS.ACCENT)(`SOL Balance: ${balanceMonitor.getCurrentBalance().toFixed(9)}`));
                     const status = balanceMonitor.getStatus();
-                    if (status.lastUpdateTime) {  // Check if lastUpdateTime exists
+                    if (status.lastUpdateTime) {
                         console.log(chalk.hex(COLORS.SECONDARY)(`Last Update: ${status.lastUpdateTime.toLocaleString()}`));
                     }
                 }
@@ -67,8 +69,9 @@ export async function handleCopyTrade(): Promise<void> {
         console.log(chalk.hex(COLORS.ACCENT)("2. Stop Monitoring"));
         console.log(chalk.hex(COLORS.ACCENT)("3. Add Wallet to Monitor"));
         console.log(chalk.hex(COLORS.ACCENT)("4. Remove Wallet"));
-        console.log(chalk.hex(COLORS.ACCENT)("5. Copy Trade Settings")); // New option
-        console.log(chalk.hex(COLORS.ACCENT)("6. Back to Main Menu"));
+        console.log(chalk.hex(COLORS.ACCENT)("5. Copy Trade Settings"));
+        console.log(chalk.hex(COLORS.ACCENT)("6. View Logs"));
+        console.log(chalk.hex(COLORS.ACCENT)("7. Back to Main Menu"));
         
         const choice = await new Promise<string>(resolve => {
             rl.question(chalk.hex(COLORS.PRIMARY)('\nSelect an option: '), resolve);
@@ -88,18 +91,88 @@ export async function handleCopyTrade(): Promise<void> {
                 await removeWallet();
                 break;
             case "5":
-                await handleCopyTradeSettings(); // New handler
+                await handleCopyTradeSettings();
                 break;
             case "6":
+                await viewLogs();
+                break;
+            case "7":
                 return;
             default:
                 console.log(chalk.hex(COLORS.ERROR)("Invalid option"));
         }
 
-        if (choice !== "5") {
+        if (choice !== "5" && choice !== "6") {
             await new Promise<void>(resolve => {
                 rl.question(chalk.hex(COLORS.SECONDARY)('\nPress Enter to continue...'), () => resolve());
             });
+        }
+    }
+}
+
+async function viewLogs(): Promise<void> {
+    console.clear();
+    console.log(chalk.hex(COLORS.PRIMARY)("\nCopy Trade Logs"));
+    console.log(chalk.hex(COLORS.SECONDARY)("—".repeat(30)));
+
+    const displayLogs = () => {
+        console.clear();
+        console.log(chalk.hex(COLORS.PRIMARY)("\nCopy Trade Logs"));
+        console.log(chalk.hex(COLORS.SECONDARY)("—".repeat(30)));
+        
+        const logs = logger.getLogs(50); // Get last 50 logs
+        if (logs.length === 0) {
+            console.log(chalk.yellow("\nNo logs available"));
+        } else {
+            logs.forEach(log => {
+                console.log(logger.formatLog(log));
+            });
+        }
+
+        console.log(chalk.hex(COLORS.ACCENT)("\n1. Stop Auto-Update"));
+        console.log(chalk.hex(COLORS.ACCENT)("2. Clear Logs"));
+        console.log(chalk.hex(COLORS.ACCENT)("3. Back to Copy Trading Menu"));
+    };
+
+    // Set up event listeners for auto-updating
+    const handleNewLog = () => {
+        displayLogs();
+    };
+
+    const handleLogsCleared = () => {
+        displayLogs();
+    };
+
+    logger.on('newLog', handleNewLog);
+    logger.on('logsCleared', handleLogsCleared);
+
+    // Initial display
+    displayLogs();
+
+    while (true) {
+        const choice = await new Promise<string>(resolve => {
+            rl.question(chalk.hex(COLORS.PRIMARY)('\nSelect an option: '), resolve);
+        });
+
+        switch (choice) {
+            case "1":
+                // Remove event listeners and return to manual refresh mode
+                logger.removeListener('newLog', handleNewLog);
+                logger.removeListener('logsCleared', handleLogsCleared);
+                return;
+            case "2":
+                logger.clearLogs();
+                break;
+            case "3":
+                // Clean up event listeners before returning
+                logger.removeListener('newLog', handleNewLog);
+                logger.removeListener('logsCleared', handleLogsCleared);
+                return;
+            default:
+                console.log(chalk.hex(COLORS.ERROR)("Invalid option"));
+                await new Promise<void>(resolve => {
+                    rl.question(chalk.hex(COLORS.SECONDARY)('\nPress Enter to continue...'), () => resolve());
+                });
         }
     }
 }
