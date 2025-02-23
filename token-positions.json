@@ -1,0 +1,70 @@
+{
+  "Bki8JEHK1ADbKDTUXLewvh25NE8jHmUr9v3i47x2pump": {
+    "tokenAddress": "Bki8JEHK1ADbKDTUXLewvh25NE8jHmUr9v3i47x2pump",
+    "transactions": [
+      {
+        "tokenAddress": "Bki8JEHK1ADbKDTUXLewvh25NE8jHmUr9v3i47x2pump",
+        "timestamp": 1736108812473,
+        "type": "buy",
+        "solAmount": 0.001,
+        "tokenAmount": 9463907061,
+        "pricePerToken": 1.0566460485658398e-13,
+        "signature": "3L9LRA1EzrTZUYMtcvbFr8gFjLCs15uqUdZGZW2eWzacUKZKgsFUjzuhEriBHHwp1yJGWuoxksBGX3d38jeBYf5m"
+      }
+    ],
+    "currentTokens": 9463907061,
+    "totalInvestment": 0.001,
+    "averageEntryPrice": 1.0566460485658398e-13
+  },
+  "5W6wNXkrsqB1s8FAACSWu9unWz3UibhdMmy78gNJpump": {
+    "tokenAddress": "5W6wNXkrsqB1s8FAACSWu9unWz3UibhdMmy78gNJpump",
+    "transactions": [
+      {
+        "tokenAddress": "5W6wNXkrsqB1s8FAACSWu9unWz3UibhdMmy78gNJpump",
+        "timestamp": 1736197978363,
+        "type": "sell",
+        "solAmount": -0.000020981,
+        "tokenAmount": 1634582389,
+        "pricePerToken": -1.2835694389706287e-14,
+        "signature": "3bJ4Eimvj6gf1xh3TfvwKFEnSdNtxG8h6rzH2vBJvA2HT6bUZrYTJdMCQqrvaZoqeXyBXwvStViCzMTcFF4z7sKF"
+      }
+    ],
+    "currentTokens": -1634582389,
+    "totalInvestment": null,
+    "averageEntryPrice": 0
+  },
+  "6cRd67hEXAwb4LzjXMDWbnGsQqNJmHhnPAjQVArfpump": {
+    "tokenAddress": "6cRd67hEXAwb4LzjXMDWbnGsQqNJmHhnPAjQVArfpump",
+    "transactions": [
+      {
+        "tokenAddress": "6cRd67hEXAwb4LzjXMDWbnGsQqNJmHhnPAjQVArfpump",
+        "timestamp": 1736218882609,
+        "type": "sell",
+        "solAmount": 0.001468463,
+        "tokenAmount": 8469425272,
+        "pricePerToken": 1.7338401991156973e-13,
+        "signature": "53c8VQaQK8eYQjxYdM28QdtN2A2bkV8ZRNAp9P9WKnA1WQHm6JKswZwWxodpcCgpMhS2sfTN23vez54zWLiTNx3B"
+      }
+    ],
+    "currentTokens": -8469425272,
+    "totalInvestment": null,
+    "averageEntryPrice": 0
+  },
+  "2VhLPpZQR3tuPhucXyxQNVF1hpw2F9XoNYYHYimrpump": {
+    "tokenAddress": "2VhLPpZQR3tuPhucXyxQNVF1hpw2F9XoNYYHYimrpump",
+    "transactions": [
+      {
+        "tokenAddress": "2VhLPpZQR3tuPhucXyxQNVF1hpw2F9XoNYYHYimrpump",
+        "timestamp": 1736224197902,
+        "type": "sell",
+        "solAmount": 0.001212762,
+        "tokenAmount": 25030024303,
+        "pricePerToken": 4.8452290150379244e-14,
+        "signature": "6575XvD3xCGgmWXbwco8nnjLutCKWpGtF2aEa1PJL2UhY6Z9u1neb7YGU1VLMCRqeSjrCfx5yJWj42xXgJB3jFiW"
+      }
+    ],
+    "currentTokens": -25030024303,
+    "totalInvestment": null,
+    "averageEntryPrice": 0
+  }
+}

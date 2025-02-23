@@ -1,0 +1,74 @@
+{
+  "2sCUCJdVkmyXp4dT8sFaA9LKgSMK4yDPi9zLHiwXpump": {
+    "position": {
+      "tokenAddress": "2sCUCJdVkmyXp4dT8sFaA9LKgSMK4yDPi9zLHiwXpump",
+      "initialBuyAmount": 0.279421,
+      "initialSolSpent": 0.0001,
+      "entryPrice": 0.0003578829078702031,
+      "timestamp": 1738113573308,
+      "txId": "2W97GMTRiDwqwdrDqxgz5Vx4GQmpn4CeeWk4YNChaUvTcGT9bqUGXTt8pUcPigdtUb5VAZ8kybahZQbuSdKW4Aff",
+      "isPumpToken": false
+    },
+    "balanceInfo": {
+      "currentTokens": 0.139464,
+      "lastKnownTokens": 0.139464,
+      "totalSold": 0,
+      "totalBought": 0,
+      "lastUpdated": 1739244725445
+    }
+  },
+  "BzZ4jNisd2rM7zFtyXg5CnsmyX93hMLpiScT4G6Ppump": {
+    "position": {
+      "tokenAddress": "BzZ4jNisd2rM7zFtyXg5CnsmyX93hMLpiScT4G6Ppump",
+      "initialBuyAmount": 3386.676584,
+      "initialSolSpent": 0.0001,
+      "entryPrice": 2.9527568355919935e-8,
+      "timestamp": 1738368661198,
+      "txId": "4cvMqwDK9f6MeaicZYaYP3jZQpxdBg3M6fe7azCKG9swKwWz4sBSDvScLBZmdnVXs3rqkC4EmugbwMso2nsBL1Zi",
+      "isPumpToken": true
+    },
+    "balanceInfo": {
+      "currentTokens": 6773.375139,
+      "lastKnownTokens": 6773.375139,
+      "totalSold": 0,
+      "totalBought": 0,
+      "lastUpdated": 1739244726630
+    }
+  },
+  "8Wzs3QqV25HM5JhE9XxegHtYL3kMKdxGSKPZic6Xpump": {
+    "position": {
+      "tokenAddress": "8Wzs3QqV25HM5JhE9XxegHtYL3kMKdxGSKPZic6Xpump",
+      "initialBuyAmount": 339.524066,
+      "initialSolSpent": 0.0001,
+      "entryPrice": 2.954383911435975e-7,
+      "timestamp": 1738439346221,
+      "txId": "6rd6KVbrZpRzjGHjx3WovBNNZKgnWdgDG6WKCph3T9Uo4SNihqWuvA6fzapGA3p9mULC7iZm2nNapHwPS1iY1Qr",
+      "isPumpToken": true
+    },
+    "balanceInfo": {
+      "currentTokens": 339.524066,
+      "lastKnownTokens": 339.524066,
+      "totalSold": 0,
+      "totalBought": 0,
+      "lastUpdated": 1739244727603
+    }
+  },
+  "GCcJztunJ5HgSYNrMeDG9Hj7fAYdLPt4sND6ZpNNpump": {
+    "position": {
+      "tokenAddress": "GCcJztunJ5HgSYNrMeDG9Hj7fAYdLPt4sND6ZpNNpump",
+      "initialBuyAmount": 44.018608,
+      "initialSolSpent": 0.0001,
+      "entryPrice": 0.0000022717665220126906,
+      "timestamp": 1738440153500,
+      "txId": "4gyTWVLWFhge8atUD23nFm8LjToWM8cxYaZd2vHc5J32zhSheD7JiVDEUHXqWSGUjDsCMiBvzQSJaMoeZFsxPn5k",
+      "isPumpToken": false
+    },
+    "balanceInfo": {
+      "currentTokens": 44.018608,
+      "lastKnownTokens": 44.018608,
+      "totalSold": 0,
+      "totalBought": 0,
+      "lastUpdated": 1739244727808
+    }
+  }
+}

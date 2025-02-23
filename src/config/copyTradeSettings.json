@@ -1,0 +1,14 @@
+{
+  "buyMode": "MIRROR",
+  "fixedBuyAmount": 0.0001,
+  "minBuyAmount": 0,
+  "maxBuyAmount": 100,
+  "enabled": {
+    "pump": true,
+    "raydium": true
+  },
+  "slippageTolerance": {
+    "pump": 50,
+    "raydium": 50
+  }
+}
