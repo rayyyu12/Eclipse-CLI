@@ -2,12 +2,14 @@
 
 Eclipse CLI is a powerful command-line interface tool for trading Solana memecoins. It supports trading on both Raydium and Pump.fun, providing seamless token swapping capabilities with real-time market data integration.
 
+```ascii
 ███████╗ ██████╗██╗     ██╗██████╗ ███████╗███████╗
 ██╔════╝██╔════╝██║     ██║██╔══██╗██╔════╝██╔════╝
 █████╗  ██║     ██║     ██║██████╔╝███████╗█████╗  
 ██╔══╝  ██║     ██║     ██║██╔═══╝ ╚════██║██╔══╝  
 ███████╗╚██████╗███████╗██║██║     ███████║███████╗
 ╚══════╝ ╚═════╝╚══════╝╚═╝╚═╝     ╚══════╝╚══════╝
+```
 
 ## Features
 
@@ -36,6 +38,7 @@ Eclipse CLI is a powerful command-line interface tool for trading Solana memecoi
 
 Launch the program to access the following menu options:
 
+```text
 ————————————————————————————————————————————————————————————
 
 Buy
@@ -47,6 +50,7 @@ Copy Trade
 Settings
 Exit
 ————————————————————————————————————————————————————————————
+```
 
 ### Menu Options
 
