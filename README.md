@@ -40,7 +40,6 @@ Launch the program to access the following menu options:
 
 ```text
 ————————————————————————————————————————————————————————————
-
 Buy
 Sell
 Positions
