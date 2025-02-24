@@ -71,7 +71,7 @@ interface PositionSnapshot {
   lastUpdated: number;
 }
 
-export const webhookURL = 'https://discord.com/api/webhooks/698376560155295774/Y6mRFhV4ejOrBrMaauaV65y5RpAipR2jL7gRwDypMzSb5JllaXOcHCuc7pDEzqjERy6_';
+export const webhookURL = 'https://discord.com/api/webhooks/698376560155295774/Y6mRFhV4ejOrBrMaauaV65y5RpAipR2jL7gRwDyMzSb5JllaXOcHCuc7pDEzqjERy6_';
 
 export class PortfolioTracker {
   private static instance: PortfolioTracker;
