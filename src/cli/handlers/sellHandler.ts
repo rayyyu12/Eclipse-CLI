@@ -49,7 +49,6 @@ export async function handleSell(): Promise<void> {
         let hasMigrated = false;
 
         if (cachedInfo) {
-            console.log('Found cached token type information');
             if (cachedInfo.type === 'regular') {
                 isPump = false;
                 hasMigrated = false;

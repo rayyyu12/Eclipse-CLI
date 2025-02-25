@@ -1,5 +1,5 @@
 {
-  "buyMode": "MIRROR",
+  "buyMode": "FIXED",
   "fixedBuyAmount": 0.0001,
   "minBuyAmount": 0,
   "maxBuyAmount": 100,

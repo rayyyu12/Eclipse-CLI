@@ -1,3 +1,4 @@
+//balanceUpdater.ts
 import { EventEmitter } from "events";
 import { default as Client } from "@triton-one/yellowstone-grpc";
 import { CommitmentLevel, SubscribeRequest } from "@triton-one/yellowstone-grpc";
@@ -143,7 +144,6 @@ export class BalanceMonitor extends EventEmitter {
                         console.error(chalk.hex(COLORS.ERROR)('Error writing subscription:'), err);
                         reject(err);
                     } else {
-                        console.log(chalk.hex(COLORS.SUCCESS)('Balance subscription active'));
                         resolve();
                     }
                 });
@@ -180,11 +180,6 @@ export class BalanceMonitor extends EventEmitter {
                 const change = newBalance - oldBalance;
                 const changeColor = change >= 0 ? COLORS.SUCCESS : COLORS.ERROR;
                 
-                console.log(chalk.hex(COLORS.PRIMARY)('\nBalance Update:'));
-                console.log(`Wallet: ${this.config.wallet.slice(0, 4)}...${this.config.wallet.slice(-4)}`);
-                console.log(`Old Balance: ${oldBalance.toFixed(4)} SOL`);
-                console.log(`New Balance: ${newBalance.toFixed(4)} SOL`);
-                console.log(chalk.hex(changeColor)(`Change: ${change.toFixed(4)} SOL`));
             }
         } catch (error) {
             console.error(chalk.hex(COLORS.ERROR)('Error processing account update:'), error);

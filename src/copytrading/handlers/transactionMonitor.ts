@@ -133,10 +133,8 @@ export class TransactionMonitor extends EventEmitter {
         }
 
         try {
-            console.log(chalk.hex(COLORS.PRIMARY)('Initializing portfolio tracker...'));
             const portfolioTracker = PortfolioTracker.getInstance();
             await portfolioTracker.initializeBalanceMonitoring();
-            console.log(chalk.hex(COLORS.SUCCESS)('Portfolio tracker initialized'));
 
             await this.connect();
             this.status.isActive = true;
@@ -192,8 +190,7 @@ export class TransactionMonitor extends EventEmitter {
                 throw new Error('At least one program must be enabled for monitoring');
             }
 
-            console.log(chalk.hex(COLORS.PRIMARY)('Configuring monitors for wallets:'), this.config.wallets);
-            console.log(chalk.hex(COLORS.PRIMARY)('Programs being monitored:'), programsToMonitor);
+            console.log(chalk.hex(COLORS.PRIMARY)('Monitored Wallets:'), this.config.wallets);
 
             const request = {
                 accounts: {},
@@ -239,14 +236,12 @@ export class TransactionMonitor extends EventEmitter {
                         console.error(chalk.hex(COLORS.ERROR)('Error writing subscription:'), err);
                         reject(err);
                     } else {
-                        console.log(chalk.hex(COLORS.SUCCESS)('Successfully subscribed to transaction stream'));
                         resolve();
                     }
                 });
             });
 
             this.setupPingInterval();
-            console.log(chalk.hex(COLORS.SUCCESS)('Transaction monitor fully initialized'));
 
         } catch (error) {
             console.error(chalk.hex(COLORS.ERROR)('Error in connection process:'), error);
@@ -664,25 +659,45 @@ export class TransactionMonitor extends EventEmitter {
         try {
             const accounts = tx.transaction?.transaction?.message?.accountKeys;
             const instructions = tx.transaction?.transaction?.message?.instructions;
-
-            const pumpInstruction = instructions?.find((ix: any) => {
-                const programId = accounts[ix.programIdIndex];
+            const innerInstructions = tx.transaction?.meta?.innerInstructions || [];
+    
+            // Function to check if an instruction is a pump instruction
+            const isPumpInstruction = (ix: any, accountKeys: any[]): boolean => {
+                const programId = accountKeys[ix.programIdIndex];
                 return (
                     (programId instanceof Uint8Array || programId?.type === 'Buffer') &&
                     new PublicKey(programId).equals(PUMP_FUN_PROGRAM_ID)
                 );
-            });
+            };
+    
+            // Find pump instruction either in main instructions or inner instructions
+            let pumpInstruction: any = null;
+            let instructionAccounts = accounts;
+    
+            // First check main instructions
+            pumpInstruction = instructions?.find((ix: any) => isPumpInstruction(ix, accounts));
+    
+            // If not found in main instructions, check inner instructions
+            if (!pumpInstruction) {
+                for (const inner of innerInstructions) {
+                    const innerIx = inner.instructions.find((ix: any) => isPumpInstruction(ix, accounts));
+                    if (innerIx) {
+                        pumpInstruction = innerIx;
+                        break;
+                    }
+                }
+            }
             
             if (!pumpInstruction) return null;
-
+    
             const data = Buffer.from(pumpInstruction.data);
             const buyDiscriminator = deriveInstructionDiscriminator('global', 'buy');
             const sellDiscriminator = deriveInstructionDiscriminator('global', 'sell');
-
+    
             const isBuy = data.slice(0, 8).equals(buyDiscriminator);
             const isSell = data.slice(0, 8).equals(sellDiscriminator);
             if (!isBuy && !isSell) return null;
-
+    
             const getAccountFromIndex = (index: number): PublicKey => {
                 const account = accounts[index];
                 if (account instanceof Uint8Array) {
@@ -692,44 +707,52 @@ export class TransactionMonitor extends EventEmitter {
                 }
                 throw new Error(`Invalid account at index ${index}`);
             };
-
+    
             const keys = pumpInstruction.accounts;
             const mint = getAccountFromIndex(keys[2]);
             const bondingCurve = getAccountFromIndex(keys[3]);
             const associatedBondingCurve = getAccountFromIndex(keys[4]);
             const userTokenAccount = getAccountFromIndex(keys[5]);
-
+    
+            // Find the relevant token balances by checking all pre/post balances
             const preBalances = tx.transaction.meta?.preTokenBalances || [];
             const postBalances = tx.transaction.meta?.postTokenBalances || [];
-            const tokenPreBalance = preBalances.find((b: TokenBalance) => b.accountIndex === keys[5]);
-            const tokenPostBalance = postBalances.find((b: TokenBalance) => b.accountIndex === keys[5]);
-
+            
+            // For wrapped transactions, we need to look for the token account that matches our mint
+            const relevantPreBalance = preBalances.find((b: TokenBalance) => 
+                b.mint === mint.toString()
+            );
+            const relevantPostBalance = postBalances.find((b: TokenBalance) => 
+                b.mint === mint.toString()
+            );
+    
             let tokenAmount: number | undefined;
-            const preAmount = tokenPreBalance?.uiTokenAmount?.uiAmount ?? 0;
-            const postAmount = tokenPostBalance?.uiTokenAmount?.uiAmount;
-
+            const preAmount = relevantPreBalance?.uiTokenAmount?.uiAmount ?? 0;
+            const postAmount = relevantPostBalance?.uiTokenAmount?.uiAmount;
+    
             if (postAmount !== undefined) {
                 tokenAmount = Math.abs(Number(postAmount) - Number(preAmount));
             }
-
+    
+            // For SOL amount, we need to look at the wallet's SOL balance change
             const accountPreBalances = tx.transaction.meta?.preBalances || [];
             const accountPostBalances = tx.transaction.meta?.postBalances || [];
+            
+            // Find the index of our target wallet
             const walletIndex = accounts.findIndex((acc: any) => {
                 const pk = acc instanceof Uint8Array ? new PublicKey(acc) : new PublicKey(acc.toString());
                 return pk.toString() === walletAddress;
             });
-
+    
             let solChange: number | undefined;
-            if (
-                walletIndex !== -1 &&
-                accountPreBalances[walletIndex] !== undefined &&
-                accountPostBalances[walletIndex] !== undefined
-            ) {
+            if (walletIndex !== -1 && 
+                accountPreBalances[walletIndex] !== undefined && 
+                accountPostBalances[walletIndex] !== undefined) {
                 solChange = Math.abs(accountPostBalances[walletIndex] - accountPreBalances[walletIndex]) / LAMPORTS_PER_SOL;
             }
-
+    
             if (solChange === undefined || tokenAmount === undefined) return null;
-
+    
             const swapData: PumpSwapData = {
                 swapType: SwapType.PUMP,
                 tokenAddress: mint,
@@ -750,9 +773,9 @@ export class TransactionMonitor extends EventEmitter {
                     : tx.transaction.signature,
                 timestamp: new Date()
             };
-
+    
             return swapData;
-
+    
         } catch (error) {
             console.error(chalk.hex(COLORS.ERROR)('Error extracting pump.fun swap details:'), error);
             return null;

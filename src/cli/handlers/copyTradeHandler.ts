@@ -209,7 +209,6 @@ async function startMonitoring(): Promise<void> {
         // Initialize BlockhashManager with the connection
         const connection = credManager.getConnection();
         BlockhashManager.getInstance().initialize(connection);
-        console.log(chalk.hex(COLORS.SUCCESS)("Blockhash manager initialized"));
 
         // Get optional auth token
         let authToken: string | undefined;
@@ -231,21 +230,11 @@ async function startMonitoring(): Promise<void> {
                 });
 
                 const balanceMonitor = BalanceMonitor.getInstance();
-                balanceMonitor.on('balanceChange', (event) => {
-                    console.log(chalk.hex(COLORS.PRIMARY)('\nBalance Update:'));
-                    console.log(chalk.hex(COLORS.ACCENT)(`Wallet: ${wallet}`));
-                    console.log(chalk.hex(COLORS.ACCENT)(`Old Balance: ${event.oldBalance.toFixed(9)} SOL`));
-                    console.log(chalk.hex(COLORS.ACCENT)(`New Balance: ${event.newBalance.toFixed(9)} SOL`));
-                    console.log(chalk.hex(COLORS.ACCENT)(`Change: ${event.change.toFixed(9)} SOL`));
-                    console.log(chalk.hex(COLORS.SECONDARY)(`Slot: ${event.slot}`));
-                });
 
                 balanceMonitor.on('error', (error) => {
                     console.log(chalk.hex(COLORS.ERROR)(`\nBalance Monitor Error: ${error.message}`));
                 });
 
-                console.log(chalk.hex(COLORS.SUCCESS)(`Balance monitor initialized for wallet: ${wallet}`));
-                console.log(chalk.hex(COLORS.ACCENT)(`Initial balance: ${balanceMonitor.getCurrentBalance().toFixed(9)} SOL`));
             } catch (error) {
                 console.error(chalk.hex(COLORS.ERROR)(`Failed to initialize balance monitor for wallet ${wallet}:`), error);
             }
