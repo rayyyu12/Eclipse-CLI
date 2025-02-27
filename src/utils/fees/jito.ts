@@ -115,8 +115,6 @@ export async function prepareJitoTip(
     const tipAccountIndex = Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length);
     
     if (!silent) {
-        console.log(`Using Jito tip amount: ${tipAmount} lamports`);
-        console.log(`Selected tip account: ${JITO_TIP_ACCOUNTS[tipAccountIndex]}`);
     }
     
     return SystemProgram.transfer({
@@ -199,7 +197,6 @@ export async function sendJitoTransaction(
     // Get bundle ID from header if available
     const bundleId = response.headers.get('x-bundle-id');
     if (bundleId && !data.error) {
-        console.log(`Bundle ID: ${bundleId}`);
     }
 
     return data.result;

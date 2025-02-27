@@ -1,3 +1,4 @@
+//formatting.ts
 import chalk from 'chalk';
 import { createInterface } from 'readline';
 import ora, { Color } from 'ora';

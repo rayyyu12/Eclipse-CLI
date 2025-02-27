@@ -1,0 +1,17 @@
+2025-02-27T03:09:57.327Z INFO [App] Initializing services...
+2025-02-27T03:09:57.345Z INFO [ConnectionPool] Initialized with 1 connections
+2025-02-27T03:09:57.345Z SUCCESS [App] Connection pool initialized successfully
+2025-02-27T03:09:57.351Z SUCCESS [App] Blockhash manager initialized successfully
+2025-02-27T03:09:57.399Z SUCCESS [App] Services initialized successfully
+2025-02-27T03:09:57.602Z ERROR [PortfolioTracker] Balance monitoring initialization failed
+{}
+2025-02-27T03:09:57.603Z WARN [App] Portfolio monitoring initialization error (background)
+{}
+2025-02-27T03:09:57.604Z SUCCESS [App] Portfolio monitoring initialized
+2025-02-27T03:09:59.749Z INFO [App] Shutting down...
+2025-02-27T03:09:59.750Z INFO [App] Received SIGINT signal, shutting down
+2025-02-27T03:09:59.751Z INFO [App] Cleaning up resources...
+2025-02-27T03:09:59.752Z INFO [ConnectionPool] Connection pool cleaned up
+2025-02-27T03:09:59.753Z SUCCESS [App] Shutdown completed successfully
+2025-02-27T03:09:59.753Z INFO [ConnectionPool] Connection pool cleaned up
+2025-02-27T03:09:59.753Z SUCCESS [App] Resources cleaned up successfully

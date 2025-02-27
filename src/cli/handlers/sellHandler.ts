@@ -1,4 +1,4 @@
-//sellhandler.ts
+// src/cli/handlers/sellHandler.ts
 import { PublicKey } from "@solana/web3.js";
 import { setupConnection } from '../../index';
 import { swapTokenToSol } from '../../utils/swaps/regularSwap';
@@ -12,6 +12,8 @@ import { discoverPool } from '../../utils/pools/poolDiscovery';
 import { BlockhashManager } from '../../utils/swaps/blockhashManager';
 import chalk from 'chalk';
 import { COLORS } from '../config';
+import { PortfolioTracker } from '../../utils/positions/portfolioTracker';
+import { TokenBalanceMonitor } from '../../utils/positions/tokenBalanceMonitor';
 
 export async function handleSell(): Promise<void> {
     try {
@@ -37,8 +39,16 @@ export async function handleSell(): Promise<void> {
 
         const { connection, wallet } = await setupConnection();
 
-        // Initialize BlockhashManager before any swap operations
+        // Initialize blockhash manager
         BlockhashManager.getInstance().initialize(connection);
+
+        // Initialize portfolio tracker first to ensure it's ready
+        try {
+            await PortfolioTracker.getInstance().initializeBalanceMonitoring();
+        } catch (error) {
+            // Log but continue - not critical for selling
+            console.log(chalk.hex(COLORS.SECONDARY)('Portfolio initialization error, continuing with sell operation'));
+        }
 
         // Check token type cache first
         const tokenCache = TokenTypeCache.getInstance();
@@ -49,7 +59,6 @@ export async function handleSell(): Promise<void> {
         let hasMigrated = false;
 
         if (cachedInfo) {
-            console.log('Found cached token type information');
             if (cachedInfo.type === 'regular') {
                 isPump = false;
                 hasMigrated = false;
@@ -114,6 +123,9 @@ export async function handleSell(): Promise<void> {
                     );
                 }
 
+                // Ensure portfolio is updated after successful swap
+                await updatePortfolioAfterSell(connection, wallet.publicKey, tokenAddress);
+
                 // Cleanup BlockhashManager after successful swap
                 BlockhashManager.getInstance().cleanup();
 
@@ -138,6 +150,9 @@ export async function handleSell(): Promise<void> {
                     0.2
                 );
 
+                // Ensure portfolio is updated after successful swap
+                await updatePortfolioAfterSell(connection, wallet.publicKey, tokenAddress);
+
                 // Cleanup BlockhashManager after successful swap
                 BlockhashManager.getInstance().cleanup();
 
@@ -156,5 +171,36 @@ export async function handleSell(): Promise<void> {
         // Ensure BlockhashManager is cleaned up on any error
         BlockhashManager.getInstance().cleanup();
         displayError('Sell failed!', error);
+    }
+}
+
+/**
+ * Helper function to update portfolio after a successful sell transaction
+ */
+async function updatePortfolioAfterSell(
+    connection: any, 
+    walletPublicKey: PublicKey, 
+    tokenAddress: string
+): Promise<void> {
+    try {
+        spinner.text = 'Updating portfolio data...';
+        
+        // First use the TokenBalanceMonitor for backwards compatibility
+        const balanceMonitor = TokenBalanceMonitor.getInstance();
+        await balanceMonitor.handleConfirmedSellTransaction(
+            connection,
+            walletPublicKey,
+            tokenAddress
+        );
+        
+        // Also explicitly refresh the position in PortfolioTracker
+        const portfolioTracker = PortfolioTracker.getInstance();
+        await portfolioTracker.refreshPosition(tokenAddress);
+        
+        spinner.text = 'Portfolio updated successfully';
+    } catch (error) {
+        console.log(chalk.hex(COLORS.ERROR)('Error updating portfolio after sell:'));
+        console.error(error);
+        // Don't throw - this is a non-critical operation
     }
 }

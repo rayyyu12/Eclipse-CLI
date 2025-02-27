@@ -101,7 +101,7 @@ export async function handleMenuChoice(choice: string): Promise<boolean> {
             
         case CONFIG.COMMANDS.COPY_TRADE:
             if (await checkCopyTradeRequirements()) {
-                console.log(chalk.yellow("Copytrading is for premium members only"));
+                console.log(chalk.yellow("Premium Feature..."));
             }
             break;
             
