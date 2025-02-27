@@ -1,12 +1,9 @@
-// -------------------------------------------------------------
-// transactionmonitor.ts (updated)
-// -------------------------------------------------------------
+// src/copytrading/handlers/transactionMonitor.ts
 import { EventEmitter } from "events";
 import { default as Client, CommitmentLevel } from "@triton-one/yellowstone-grpc";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { NATIVE_MINT, getAssociatedTokenAddress } from "@solana/spl-token";
 import bs58 from "bs58";
-import chalk from 'chalk';
 
 import {
     PUMP_FUN_PROGRAM_ID,
@@ -15,15 +12,17 @@ import {
 import {
     SwapType,
     RaydiumSwapData
-} from "../../copytrading/types/types";
+} from "../types/types";
 import { CredentialsManager } from "../../cli/utils/credentialsManager";
 import { copyRaydiumSwap } from "./swaps/raydiumCopySwap";
 import { copyPumpBuySwap, copyPumpSellSwap } from "./swaps/pumpCopySwap";
 import { PortfolioTracker } from '../../utils/positions/portfolioTracker';
 import { deriveInstructionDiscriminator } from '../../utils/swaps/pumpSwap';
 import { CopyTradeSettingsManager, BuyMode } from "../../cli/utils/copyTradingSettings";
-import { COLORS } from "../../cli/config";
 import { CopyTradeLogger } from "../../cli/utils/copyTradeLogger";
+import { ConnectionPool } from "../.././utils/connection/connectionPool";
+import { Logger } from "../../cli/utils/logger";
+import { COLORS } from "../../cli/config";
 
 // Import interfaces from existing document...
 interface MonitorStatus {
@@ -88,6 +87,8 @@ export class TransactionMonitor extends EventEmitter {
     private walletSet: Set<string>;
     private processedTransactions: Set<string> = new Set();
     private logger: CopyTradeLogger;
+    private systemLogger: Logger;
+    private connectionPool: ConnectionPool;
 
     constructor(config: {
         grpcEndpoint: string;
@@ -101,6 +102,8 @@ export class TransactionMonitor extends EventEmitter {
         this.config = config;
         this.walletSet = new Set(config.wallets);
         this.logger = CopyTradeLogger.getInstance();
+        this.systemLogger = Logger.getInstance();
+        this.connectionPool = ConnectionPool.getInstance();
         this.status = {
             isActive: false,
             processedTransactions: 0,
@@ -128,7 +131,7 @@ export class TransactionMonitor extends EventEmitter {
 
     public async start(): Promise<void> {
         if (this.status.isActive) {
-            console.warn(chalk.hex(COLORS.ERROR)('Monitor is already running'));
+            this.systemLogger.warn('TransactionMonitor', 'Monitor is already running');
             return;
         }
 
@@ -141,8 +144,9 @@ export class TransactionMonitor extends EventEmitter {
             this.status.connectedAt = new Date();
             this.emit('started', this.status);
             this.setupReconnection();
+            this.systemLogger.success('TransactionMonitor', 'Monitor started successfully');
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error starting monitor:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error starting monitor', error);
             this.emit('error', {
                 type: 'STARTUP_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown startup error',
@@ -171,15 +175,17 @@ export class TransactionMonitor extends EventEmitter {
 
             this.status.isActive = false;
             this.emit('stopped', this.status);
+            this.systemLogger.info('TransactionMonitor', 'Monitor stopped successfully');
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error stopping monitor:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error stopping monitor', error);
             throw error;
         }
     }
 
     private async connect(): Promise<void> {
         try {
+            this.systemLogger.info('TransactionMonitor', 'Connecting to gRPC endpoint...');
             this.subscription = await this.client.subscribe();
 
             const programsToMonitor: string[] = [];
@@ -190,7 +196,8 @@ export class TransactionMonitor extends EventEmitter {
                 throw new Error('At least one program must be enabled for monitoring');
             }
 
-            console.log(chalk.hex(COLORS.PRIMARY)('Monitored Wallets:'), this.config.wallets);
+            this.systemLogger.info('TransactionMonitor', `Monitoring wallets: ${Array.from(this.walletSet).join(', ')}`);
+            this.systemLogger.info('TransactionMonitor', `Monitoring programs: ${programsToMonitor.join(', ')}`);
 
             const request = {
                 accounts: {},
@@ -222,7 +229,7 @@ export class TransactionMonitor extends EventEmitter {
             });
 
             this.subscription.on('error', (error: Error) => {
-                console.error(chalk.hex(COLORS.ERROR)('Stream error:'), error);
+                this.systemLogger.error('TransactionMonitor', 'Stream error', error);
                 this.emit('error', {
                     type: 'SUBSCRIPTION_ERROR',
                     message: error.message,
@@ -233,7 +240,7 @@ export class TransactionMonitor extends EventEmitter {
             await new Promise<void>((resolve, reject) => {
                 this.subscription.write(request, (err: Error | null) => {
                     if (err) {
-                        console.error(chalk.hex(COLORS.ERROR)('Error writing subscription:'), err);
+                        this.systemLogger.error('TransactionMonitor', 'Error writing subscription', err);
                         reject(err);
                     } else {
                         resolve();
@@ -242,21 +249,22 @@ export class TransactionMonitor extends EventEmitter {
             });
 
             this.setupPingInterval();
+            this.systemLogger.success('TransactionMonitor', 'Connected to gRPC endpoint successfully');
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error in connection process:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error in connection process', error);
             throw error;
         }
     }
 
     private setupReconnection(): void {
         this.subscription.on('end', () => {
-            console.warn(chalk.hex(COLORS.ERROR)('Subscription ended unexpectedly'));
+            this.systemLogger.warn('TransactionMonitor', 'Subscription ended unexpectedly');
             this.attemptReconnect();
         });
 
         this.subscription.on('close', () => {
-            console.warn(chalk.hex(COLORS.ERROR)('Subscription closed unexpectedly'));
+            this.systemLogger.warn('TransactionMonitor', 'Subscription closed unexpectedly');
             this.attemptReconnect();
         });
     }
@@ -264,7 +272,7 @@ export class TransactionMonitor extends EventEmitter {
     private async attemptReconnect(): Promise<void> {
         if (!this.status.isActive) return;
         if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.error(chalk.hex(COLORS.ERROR)('Max reconnection attempts reached'));
+            this.systemLogger.error('TransactionMonitor', 'Max reconnection attempts reached');
             this.emit('error', {
                 type: 'MAX_RECONNECT_ERROR',
                 message: 'Failed to reconnect after maximum attempts',
@@ -275,14 +283,14 @@ export class TransactionMonitor extends EventEmitter {
         }
 
         this.reconnectAttempts++;
-        console.log(chalk.hex(COLORS.PRIMARY)(`Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`));
+        this.systemLogger.info('TransactionMonitor', `Attempting to reconnect (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
 
         try {
             await this.connect();
             this.reconnectAttempts = 0;
-            console.log(chalk.hex(COLORS.SUCCESS)('Successfully reconnected'));
+            this.systemLogger.success('TransactionMonitor', 'Successfully reconnected');
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Reconnection attempt failed:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Reconnection attempt failed', error);
             setTimeout(() => this.attemptReconnect(), 5000);
         }
     }
@@ -295,7 +303,7 @@ export class TransactionMonitor extends EventEmitter {
             if (status.lastTransactionAt) {
                 const lastTxAge = Date.now() - status.lastTransactionAt.getTime();
                 if (lastTxAge > this.PING_INTERVAL_MS * 2) {
-                    console.warn(chalk.hex(COLORS.ERROR)(`No transactions received for ${Math.round(lastTxAge / 1000)}s`));
+                    this.systemLogger.warn('TransactionMonitor', `No transactions received for ${Math.round(lastTxAge / 1000)}s`);
                     this.attemptReconnect();
                 }
             }
@@ -310,8 +318,12 @@ export class TransactionMonitor extends EventEmitter {
                 const transactions = Array.from(this.processedTransactions);
                 const toKeep = transactions.slice(-this.MAX_PROCESSED_TRANSACTIONS);
                 this.processedTransactions = new Set(toKeep);
+                this.systemLogger.debug(
+                    'TransactionMonitor',
+                    `Cleaned up transaction cache, reduced from ${transactions.length} to ${toKeep.length} items`
+                );
             }
-        }, 60 * 60 * 1000);
+        }, 60 * 60 * 1000); // Run once per hour
     }
 
     private async handleTransaction(tx: any): Promise<void> {
@@ -325,6 +337,8 @@ export class TransactionMonitor extends EventEmitter {
                     : tx.transaction.signature;
 
             if (this.processedTransactions.has(signature)) return;
+            
+            // Add to processed transactions first to avoid duplicate processing
             this.processedTransactions.add(signature);
 
             const walletAddress = await this.extractWalletAddress(tx);
@@ -346,11 +360,13 @@ export class TransactionMonitor extends EventEmitter {
             let swapData: RaydiumSwapData | PumpSwapData | null = null;
 
             if (isPumpTransaction) {
+                // Handle Pump.fun transaction
                 swapData = this.extractPumpSwapDetails(tx, walletAddress);
                 if (swapData?.success && swapData?.amountIn !== undefined && swapData?.amountOut !== undefined) {
                     await this.executeCopyTrade(swapData, signature);
                 }
             } else {
+                // Handle Raydium transaction
                 const rayLog = logs.find((log: any) => 
                     (typeof log === 'string' ? log : log.message).includes('ray_log:')
                 );
@@ -427,7 +443,7 @@ export class TransactionMonitor extends EventEmitter {
             this.emit('swap', swapData);
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error processing transaction:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error processing transaction', error);
             this.emit('error', {
                 type: 'PARSE_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error processing transaction',
@@ -440,9 +456,12 @@ export class TransactionMonitor extends EventEmitter {
     // COPY TRADE EXECUTION
     // -------------------------------------------------------------------------
     private async executeCopyTrade(swapData: RaydiumSwapData | PumpSwapData, originalSignature: string): Promise<void> {
+        const startTime = Date.now();
+        
         try {
             const credManager = CredentialsManager.getInstance();
-            const connection = credManager.getConnection();
+            // Use connection pool instead of direct connection
+            const connection = this.connectionPool.getConnection();
             const wallet = credManager.getKeyPair();
             const settings = CopyTradeSettingsManager.getInstance().getSettings();
 
@@ -462,6 +481,12 @@ export class TransactionMonitor extends EventEmitter {
                     tokenAddress: swapData.tokenAddress.toString()
                 }
             });
+
+            this.systemLogger.info(
+                'TransactionMonitor',
+                `Executing ${swapData.isBuy ? 'BUY' : 'SELL'} for ${swapData.tokenAddress.toString()} on ${swapData.swapType}`,
+                { originalTx: originalSignature }
+            );
 
             let copySignature: string;
 
@@ -490,6 +515,12 @@ export class TransactionMonitor extends EventEmitter {
                         message: `Buying with ${amountInSol} SOL`,
                         details: { amount: amountInSol, tokenAddress: pumpData.tokenAddress.toString() }
                     });
+
+                    this.systemLogger.info(
+                        'TransactionMonitor', 
+                        `Buying with ${amountInSol} SOL on Pump.fun`,
+                        { tokenAddress: pumpData.tokenAddress.toString() }
+                    );
 
                     copySignature = await copyPumpBuySwap(connection, wallet, pumpData, amountInLamports);
                 } else {
@@ -533,6 +564,12 @@ export class TransactionMonitor extends EventEmitter {
                             details: { amount: tokenBalance, tokenAddress: pumpData.tokenAddress.toString() }
                         });
 
+                        this.systemLogger.info(
+                            'TransactionMonitor', 
+                            `Selling ${tokenBalance} tokens from position on Pump.fun`,
+                            { tokenAddress: pumpData.tokenAddress.toString() }
+                        );
+
                         copySignature = await copyPumpSellSwap(
                             connection, 
                             wallet, 
@@ -573,6 +610,12 @@ export class TransactionMonitor extends EventEmitter {
                         details: { amount: amountInSol, tokenAddress: raydiumData.tokenAddress.toString() }
                     });
 
+                    this.systemLogger.info(
+                        'TransactionMonitor', 
+                        `Buying with ${amountInSol} SOL on Raydium`,
+                        { tokenAddress: raydiumData.tokenAddress.toString() }
+                    );
+
                     copySignature = await copyRaydiumSwap(connection, wallet, raydiumData, amountInLamports);
                 } else {
                     const portfolioTracker = PortfolioTracker.getInstance();
@@ -592,6 +635,12 @@ export class TransactionMonitor extends EventEmitter {
                         details: { amount: tokenAmount, tokenAddress: raydiumData.tokenAddress.toString() }
                     });
 
+                    this.systemLogger.info(
+                        'TransactionMonitor', 
+                        `Selling ${tokenAmount} tokens on Raydium`,
+                        { tokenAddress: raydiumData.tokenAddress.toString() }
+                    );
+
                     copySignature = await copyRaydiumSwap(
                         connection,
                         wallet,
@@ -605,6 +654,8 @@ export class TransactionMonitor extends EventEmitter {
                 }
             }
 
+            const executionTime = Date.now() - startTime;
+
             this.logger.addLog({
                 type: 'success',
                 protocol: swapData.swapType,
@@ -614,19 +665,34 @@ export class TransactionMonitor extends EventEmitter {
                     originalTx: originalSignature,
                     type: swapData.isBuy ? 'BUY' : 'SELL',
                     tokenAddress: swapData.tokenAddress.toString(),
-                    explorer: `https://solscan.io/tx/${copySignature}`
+                    explorer: `https://solscan.io/tx/${copySignature}`,
+                    executionTimeMs: executionTime
                 }
             });
+
+            this.systemLogger.success(
+                'TransactionMonitor',
+                `Copy trade successful in ${executionTime}ms`,
+                {
+                    signature: copySignature,
+                    originalTx: originalSignature,
+                    type: swapData.isBuy ? 'BUY' : 'SELL',
+                    tokenAddress: swapData.tokenAddress.toString()
+                }
+            );
 
             this.emit('copyTradeSuccess', {
                 originalSignature,
                 copySignature,
                 protocol: swapData.swapType,
                 type: swapData.isBuy ? 'BUY' : 'SELL',
-                tokenAddress: swapData.tokenAddress.toString()
+                tokenAddress: swapData.tokenAddress.toString(),
+                executionTimeMs: executionTime
             });
 
         } catch (error) {
+            const executionTime = Date.now() - startTime;
+            
             this.logger.addLog({
                 type: 'error',
                 protocol: swapData.swapType,
@@ -634,16 +700,29 @@ export class TransactionMonitor extends EventEmitter {
                 details: {
                     originalTx: originalSignature,
                     type: swapData.isBuy ? 'BUY' : 'SELL',
-                    tokenAddress: swapData.tokenAddress.toString()
+                    tokenAddress: swapData.tokenAddress.toString(),
+                    executionTimeMs: executionTime
                 }
             });
+            
+            this.systemLogger.error(
+                'TransactionMonitor',
+                `Copy trade failed in ${executionTime}ms`,
+                {
+                    originalTx: originalSignature,
+                    type: swapData.isBuy ? 'BUY' : 'SELL',
+                    tokenAddress: swapData.tokenAddress.toString(),
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                }
+            );
             
             this.emit('copyTradeError', {
                 originalSignature,
                 error: error instanceof Error ? error.message : 'Unknown error',
                 protocol: swapData.swapType,
                 type: swapData.isBuy ? 'BUY' : 'SELL',
-                tokenAddress: swapData.tokenAddress.toString()
+                tokenAddress: swapData.tokenAddress.toString(),
+                executionTimeMs: executionTime
             });
 
             throw error;
@@ -777,7 +856,7 @@ export class TransactionMonitor extends EventEmitter {
             return swapData;
     
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error extracting pump.fun swap details:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error extracting pump.fun swap details', error);
             return null;
         }
     }
@@ -839,7 +918,7 @@ export class TransactionMonitor extends EventEmitter {
             return poolAccounts;
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error extracting pool accounts:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error extracting pool accounts', error);
             return null;
         }
     }
@@ -926,7 +1005,7 @@ export class TransactionMonitor extends EventEmitter {
             };
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error extracting swap details:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error extracting swap details', error);
             return null;
         }
     }
@@ -985,7 +1064,7 @@ export class TransactionMonitor extends EventEmitter {
             };
 
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error calculating token changes:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error calculating token changes', error);
             return null;
         }
     }
@@ -1046,20 +1125,20 @@ export class TransactionMonitor extends EventEmitter {
             }
             return undefined;
         } catch (error) {
-            console.error(chalk.hex(COLORS.ERROR)('Error extracting wallet address:'), error);
+            this.systemLogger.error('TransactionMonitor', 'Error extracting wallet address', error);
             return undefined;
         }
     }
 
     public addWallet(address: string): void {
         if (!address.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
-            throw new Error(chalk.hex(COLORS.ERROR)(`Invalid wallet address: ${address}`));
+            throw new Error(`Invalid wallet address: ${address}`);
         }
         if (!this.config.wallets.includes(address)) {
             this.config.wallets.push(address);
             this.walletSet.add(address);
             if (this.status.isActive) {
-                console.log(chalk.hex(COLORS.PRIMARY)('Restarting monitor to include new wallet...'));
+                this.systemLogger.info('TransactionMonitor', 'Restarting monitor to include new wallet');
                 this.stop().then(() => this.start());
             }
         }
@@ -1071,7 +1150,7 @@ export class TransactionMonitor extends EventEmitter {
             this.config.wallets.splice(index, 1);
             this.walletSet.delete(address);
             if (this.status.isActive) {
-                console.log(chalk.hex(COLORS.PRIMARY)('Restarting monitor after wallet removal...'));
+                this.systemLogger.info('TransactionMonitor', 'Restarting monitor after wallet removal');
                 this.stop().then(() => this.start());
             }
         }

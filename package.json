@@ -1,10 +1,28 @@
 {
-  "name": "sol-usdc-swap",
-  "version": "1.0.0",
+  "name": "eclipse-trader",
+  "version": "0.1.1",
+  "description": "Advanced Solana trading bot with copy trading capabilities",
   "scripts": {
     "start": "ts-node src/index.ts",
     "cli": "ts-node src/cli/index.ts",
-    "build": "tsc"
+    "build": "ts-node build.ts",
+    "build:exe": "ts-node build.ts",
+    "compile": "tsc",
+    "package": "npm run compile && ts-node package.ts"
+  },
+  "bin": {
+    "eclipse-trader": "./dist/launcher.js"
+  },
+  "pkg": {
+    "assets": [
+      "dist/**/*"
+    ],
+    "targets": [
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-macos-x64"
+    ],
+    "outputPath": "executables"
   },
   "dependencies": {
     "@connectrpc/connect": "^2.0.0",
@@ -19,11 +37,9 @@
     "@solana/spl-token-registry": "^0.2.4574",
     "@solana/web3.js": "^1.87.0",
     "@triton-one/yellowstone-grpc": "^1.4.1",
-    "@types/node-fetch": "^2.6.12",
-    "axios": "^1.7.9",
+    "axios": "^1.6.7",
     "bn.js": "^5.2.1",
     "bs58": "^6.0.0",
-    "canvas": "^3.1.0",
     "chalk": "^4.1.2",
     "compression": "^1.7.5",
     "cross-fetch": "^4.1.0",
@@ -32,8 +48,10 @@
     "form-data": "^4.0.1",
     "jito-ts": "^4.2.0",
     "node-fetch": "^3.3.2",
-    "ora": "^5.4.1",
-    "sharp": "^0.33.5"
+    "ora": "^5.4.1"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.32.6"
   },
   "resolutions": {
     "punycode": "^2.1.1"
@@ -42,8 +60,14 @@
     "@types/bn.js": "^5.1.1",
     "@types/compression": "^1.7.5",
     "@types/express": "^5.0.0",
-    "@types/node": "^18.0.0",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.0"
+    "@types/node": "^18.19.10",
+    "archiver": "^5.3.1",
+    "esbuild": "^0.20.2",
+    "pkg": "^5.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.17.0"
   }
 }

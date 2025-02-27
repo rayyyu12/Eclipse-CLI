@@ -32,6 +32,7 @@ export const COLORS = {
     ACCENT: '#F5E6DE',     // Beige/cream
     BACKGROUND: '#D3D3D3', // Light gray/silver
     ERROR: '#b52b40',      // Red
+    WARNING: '#b52b40',
     SUCCESS: '#D3D3FF',     // Lavender
     LOGO: "#e29393"
 };

@@ -1,3 +1,4 @@
+//copyTradingSettings.ts
 import * as fs from 'fs';
 import * as path from 'path';
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";

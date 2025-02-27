@@ -1,3 +1,4 @@
+//imagegenerator.ts
 import sharp from 'sharp';
 import path from 'path';
 import { Position } from './portfolioTracker';

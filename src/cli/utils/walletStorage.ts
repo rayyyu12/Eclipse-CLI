@@ -1,3 +1,4 @@
+//walletStorage.ts
 import { SecureStorage } from './secureStorage';
 import chalk from 'chalk';
 import { COLORS } from '../config';
