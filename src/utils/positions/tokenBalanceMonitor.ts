@@ -105,9 +105,6 @@ export class TokenBalanceMonitor {
         }
     }
 
-    /**
-     * Stop monitoring all tokens
-     */
     public async stopAllMonitoring(): Promise<void> {
         try {
             await this.tracker.cleanup();

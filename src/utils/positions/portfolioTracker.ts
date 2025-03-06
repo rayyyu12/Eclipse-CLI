@@ -999,7 +999,6 @@ export class PortfolioTracker extends EventEmitter {
         return;
       }
       
-      // Send each position to Discord
       for (const position of positionData.positions) {
         try {
           await this.sendPositionToDiscord(position);

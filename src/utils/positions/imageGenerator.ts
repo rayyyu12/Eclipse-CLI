@@ -274,9 +274,6 @@ export class ImageGenerator {
     return value >= 1 ? value.toFixed(2) : value.toFixed(6);
   }
 
-  /**
-   * Send generated image to Discord
-   */
   public async sendToDiscord(imageBuffer: Buffer, position: Position): Promise<void> {
     try {
       const form = new FormData();

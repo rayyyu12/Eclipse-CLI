@@ -45,7 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
         buySlippage: 0.5,    // 0.5% default buy slippage
         sellSlippage: 1.0    // 1.0% default sell slippage
     },
-    connection: {},  // Empty since managed by CredentialsManager
+    connection: {},  
     notifications: {
         enableDiscordWebhook: false,
         notifyOnTrades: true,
