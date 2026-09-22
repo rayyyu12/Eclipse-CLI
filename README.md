@@ -1,112 +1,97 @@
 # Eclipse CLI
 
-Eclipse CLI is a powerful command-line interface tool for trading Solana memecoins. It supports trading on both Raydium and Pump.fun, providing seamless token swapping capabilities with real-time market data integration.
+A terminal client for trading Solana memecoins, routing directly to Raydium
+AMM v4 and the pump.fun bonding curve. Live position tracking with average
+entry and PnL, configurable priority fees and Jito tips.
 
-```ascii
-███████╗ ██████╗██╗     ██╗██████╗ ███████╗███████╗
-██╔════╝██╔════╝██║     ██║██╔══██╗██╔════╝██╔════╝
-█████╗  ██║     ██║     ██║██████╔╝███████╗█████╗  
-██╔══╝  ██║     ██║     ██║██╔═══╝ ╚════██║██╔══╝  
-███████╗╚██████╗███████╗██║██║     ███████║███████╗
-╚══════╝ ╚═════╝╚══════╝╚═╝╚═╝     ╚══════╝╚══════╝
+C++17, three dependencies, no SDK.
+
+## Why it has no SDK
+
+The transaction layer is built from the wire format rather than a client
+library: base58, ed25519 signing, program-derived addresses, shortvec length
+prefixes, and legacy message compilation are all in `src/common` and
+`src/solana`. That is roughly 600 lines, and in exchange the binary has no
+dependency that can break on a version bump, and nothing between the code and
+the bytes that reach the validator.
+
+The pieces where a silent mistake would be expensive are pinned to known
+values in the test suite. Program-derived address generation, for instance, is
+checked against Raydium's published AMM authority
+(`5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1`), which only derives correctly
+if the SHA-256 seeding, the bump search and the ed25519 on-curve rejection are
+all right.
+
+## Building
+
+Needs CMake 3.16+, a C++17 compiler, libcurl and OpenSSL 3.
+nlohmann/json is fetched automatically if it is not installed.
+
+```bash
+cmake -B build
+cmake --build build
+./build/eclipse
 ```
 
-## Features
+On macOS:
 
-- **Token Trading**: Buy and sell Solana tokens using contract addresses
-- **Multi-DEX Support**: Compatible with both Raydium and Pump.fun
-- **Real-time Position Tracking**: Monitor PnL, average entry price, and position sizes
-- **Wallet Management**: Check balances and transfer SOL between wallets
-- **Customizable Settings**: Configure various parameters for optimal trading
-- **Transaction Priority**: Adjustable Jito tip and priority fee settings
-- **Discord Integration**: Set up webhooks for trade notifications
-
-## Prerequisites
-
-- Solana RPC URL
-- WebSocket (WS) URL
-- Wallet private key
-- Discord webhook (optional)
-
-## Installation
-
-1. Download the latest release
-2. Configure your settings through the CLI interface
-3. Ensure you have sufficient SOL in your wallet for trading and fees
-
-## Usage
-
-Launch the program to access the following menu options:
-
-```text
-————————————————————————————————————————————————————————————
-Buy
-Sell
-Positions
-Balance
-Transfer
-Copy Trade
-Settings
-Exit
-————————————————————————————————————————————————————————————
+```bash
+brew install cmake openssl@3 curl
 ```
 
-### Menu Options
+## Tests
 
-- **Buy**: Purchase tokens using contract address
-- **Sell**: Sell tokens from your portfolio
-- **Positions**: View current positions with detailed metrics
-  - PnL
-  - Average entry price
-  - Amount sold
-  - Amount remaining
-- **Balance**: Check current SOL balance
-- **Transfer**: Send SOL to other wallets
-- **Settings**: Configure program parameters
-  - Discord webhook URL
-  - Wallet private key
-  - GRPC URL
-  - RPC URL
-  - WS URL
-  - Jito tip amount
-  - Priority fee amount
+```bash
+./build/eclipse-tests
+```
 
-## Fees
+Covers the base58 codec, PDA derivation, shortvec encoding, message
+compilation, keypair round-tripping, the constant-product maths and amount
+parsing. 43 checks.
 
-- A 0.5% fee per transaction is automatically sent to the developer
-- Additional network fees apply based on your priority settings
+## Layout
 
-## Important Notes
+```
+include/eclipse/
+  common/     base58, ed25519 keypairs, public keys, logging
+  solana/     instructions, legacy transactions, program helpers
+  net/        HTTP transport, JSON-RPC client, connection pool
+  pools/      Raydium pool decoding, discovery, quoting, caches
+  swaps/      Raydium and pump.fun execution paths
+  fees/       Jito tips, priority fee estimation
+  positions/  portfolio polling, trade history, position cards
+  orders/     client-side stop-loss and take-profit
+  cli/        menu, prompts, settings, encrypted credential store
+```
 
-- RPC and WebSocket URLs are required for program operation
-- Keep your private key secure and never share it
-- Monitor your SOL balance for transaction fees
-- The Copy Trade feature is available in the premium version only
-- Set appropriate priority fees during high network congestion
+## Configuration
 
-## Security
+Settings live in `settings.json` beside the binary. Credentials do not: the
+RPC URL and private key go in `~/.eclipse-cli/credentials.enc`, encrypted with
+AES-256-GCM under a key at `~/.eclipse-cli/storage.key`, both written `0600`.
 
-- Never share your private key
-- Use a dedicated wallet for trading
-- Regularly monitor your Discord webhooks
-- Review transactions before confirming
+That protects the key at rest against backups and casual inspection. It is not
+protection against someone who already has your account.
 
-## Troubleshooting
+Configure both from Settings on first run. The private key prompt does not
+echo.
 
-Common issues:
-- Connection errors: Verify RPC and WS URLs
-- Failed transactions: Check SOL balance and priority fees
-- Position tracking issues: Refresh positions page (currently broken)
+## Notes
 
-## Disclaimer
+- Pump.fun tokens graduate to Raydium, so the venue is resolved per order
+  rather than assumed. Results are cached for an hour, because a stale answer
+  routes an order to the wrong program.
+- Pool discovery is a `getProgramAccounts` scan that some providers rate-limit
+  hard. Resolved pools are cached to `pools-cache.json` indefinitely, since a
+  pool's account set never changes once created.
+- Buying wraps SOL in a throwaway account created and closed inside the same
+  transaction, so a failed swap cannot strand wrapped SOL.
+- The Discord webhook URL is read from settings and is off by default.
+  Notifications render as SVG, which needs no font files or rasteriser.
+- A 429 from an RPC endpoint is treated as backpressure, not an error. The
+  connection pool parks an endpoint after three consecutive failures and
+  revives the last working one if every endpoint goes down.
 
-Trading cryptocurrencies involves risk. This tool is provided as-is, and users are responsible for their trading decisions.
+## Licence
 
-## Support
-
-For issues and feature requests, please open a GitHub issue.
-
-## License
-
-All rights reserved. The free version includes basic trading functionality, while advanced features like copy trading are available in the premium version (coming soon).
-
+MIT.

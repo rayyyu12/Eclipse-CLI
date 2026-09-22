@@ -1,2 +1,23 @@
+# Build output
+build/
+cmake-build-*/
+*.o
+*.a
+
+# Runtime state, regenerated on demand
+logs/
+pools-cache.json
+token-positions.json
+token-types-cache.json
+
+# Credentials never belong in the repository. They live encrypted in
+# ~/.eclipse-cli, but this guards against a stray copy.
+*.enc
+*.key
 .env
-node_modules
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+compile_commands.json
