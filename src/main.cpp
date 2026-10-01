@@ -28,7 +28,9 @@ void shutdown() {
   logger.info("App", "Shutting down");
 
   // Stop the background threads before the singletons they read start being
-  // torn down.
+  // torn down. The copy trader goes first: its in-flight copies use all of
+  // the services below.
+  cli::handlers::shutdown_copy_trade();
   positions::PortfolioTracker::instance().stop();
   orders::OrderManager::instance().stop();
   swaps::BlockhashManager::instance().cleanup();

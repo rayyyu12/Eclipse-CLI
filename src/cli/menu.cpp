@@ -6,6 +6,7 @@
 #include "eclipse/cli/config.hpp"
 #include "eclipse/cli/credentials_manager.hpp"
 #include "eclipse/cli/formatting.hpp"
+#include "eclipse/copytrade/geyser_client.hpp"
 
 namespace eclipse::cli {
 namespace {
@@ -101,8 +102,14 @@ bool handle_menu_choice(const std::string& choice) {
     if (require_private_key()) handlers::handle_transfer();
 
   } else if (choice == config::command::kCopyTrade) {
-    if (require_copy_trade()) {
-      display_info("Copy trading is a premium feature.");
+    if (!copytrade::GeyserClient::available()) {
+      // Built without -DECLIPSE_COPYTRADE: there is no stream to follow
+      // wallets with, so say so rather than failing at Start.
+      display_info("Copy trading is not compiled into this build.");
+      display_info(
+          "Rebuild with -DECLIPSE_COPYTRADE=ON (needs gRPC and Protobuf).");
+    } else if (require_copy_trade() && require_private_key()) {
+      handlers::handle_copy_trade();
     }
 
   } else if (choice == config::command::kSettings) {

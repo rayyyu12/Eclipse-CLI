@@ -76,6 +76,8 @@ add_library(eclipse_core STATIC
   src/cli/handlers/sell_handler.cpp
   src/cli/handlers/positions_handler.cpp
   src/cli/handlers/settings_handler.cpp
+  src/cli/handlers/copy_trade_handler.cpp
+  src/cli/handlers/copy_trade_settings_handler.cpp
 
   src/swaps/blockhash_manager.cpp
   src/swaps/swap_builder.cpp
