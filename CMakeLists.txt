@@ -91,6 +91,12 @@ add_library(eclipse_core STATIC
   src/positions/report_card.cpp
 
   src/orders/order_manager.cpp
+
+  # Copy trading.
+  src/copytrade/types.cpp
+  src/copytrade/transaction_parser.cpp
+  src/copytrade/copy_trade_logger.cpp
+  src/copytrade/copy_swap.cpp
 )
 
 target_include_directories(eclipse_core PUBLIC include)
