@@ -24,7 +24,13 @@ endif()
 #   OpenSSL   AES-256-GCM for the credential store, SHA-256 for PDA
 #             derivation, Ed25519 for transaction signing.
 #   nlohmann  JSON parse/serialise. Fetched if not installed system-wide.
+#
+# With -DECLIPSE_COPYTRADE=ON, also gRPC C++ and Protobuf; see below.
 # ---------------------------------------------------------------------------
+
+option(ECLIPSE_COPYTRADE
+  "Build the Yellowstone gRPC stream the copy trader listens on (needs gRPC and Protobuf)"
+  OFF)
 
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -92,11 +98,13 @@ add_library(eclipse_core STATIC
 
   src/orders/order_manager.cpp
 
-  # Copy trading.
+  # Copy trading. Everything here is gRPC-free and always compiled; only the
+  # Yellowstone stream itself (geyser_client) depends on ECLIPSE_COPYTRADE.
   src/copytrade/types.cpp
   src/copytrade/transaction_parser.cpp
   src/copytrade/copy_trade_logger.cpp
   src/copytrade/copy_swap.cpp
+  src/copytrade/stream_supervisor.cpp
 )
 
 target_include_directories(eclipse_core PUBLIC include)
@@ -108,6 +116,87 @@ target_link_libraries(eclipse_core PUBLIC
   nlohmann_json::nlohmann_json
   Threads::Threads
 )
+
+# ---------------------------------------------------------------------------
+# Copy trading stream
+#
+#   cmake -B build -DECLIPSE_COPYTRADE=ON
+#
+# The copy trader follows wallets over a Yellowstone gRPC (Dragon's Mouth)
+# Subscribe stream. That one translation unit, geyser_client.cpp, is the only
+# code that needs gRPC; it is built from geyser.proto and solana-storage.proto,
+# vendored unmodified under third_party/yellowstone-grpc-proto (Apache-2.0,
+# from rpcpool/yellowstone-grpc; see the README there for the pinned commit).
+#
+# Needs gRPC C++ and Protobuf with protoc and grpc_cpp_plugin, found through
+# their CMake packages. Off by default, in which case
+# geyser_client_unavailable.cpp stands in and the menu reports that copy
+# trading is not compiled in. Everything else in src/copytrade builds either
+# way.
+# ---------------------------------------------------------------------------
+
+if(ECLIPSE_COPYTRADE)
+  find_package(Protobuf CONFIG QUIET)
+  if(NOT Protobuf_FOUND)
+    find_package(Protobuf REQUIRED)
+  endif()
+  find_package(gRPC CONFIG REQUIRED)
+
+  set(YELLOWSTONE_PROTO_DIR
+      ${CMAKE_CURRENT_SOURCE_DIR}/third_party/yellowstone-grpc-proto)
+  set(YELLOWSTONE_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/yellowstone)
+  file(MAKE_DIRECTORY ${YELLOWSTONE_GEN_DIR})
+
+  set(YELLOWSTONE_PROTOS
+      ${YELLOWSTONE_PROTO_DIR}/geyser.proto
+      ${YELLOWSTONE_PROTO_DIR}/solana-storage.proto)
+
+  set(YELLOWSTONE_GENERATED)
+  foreach(name geyser solana-storage)
+    list(APPEND YELLOWSTONE_GENERATED
+         ${YELLOWSTONE_GEN_DIR}/${name}.pb.cc
+         ${YELLOWSTONE_GEN_DIR}/${name}.pb.h
+         ${YELLOWSTONE_GEN_DIR}/${name}.grpc.pb.cc
+         ${YELLOWSTONE_GEN_DIR}/${name}.grpc.pb.h)
+  endforeach()
+
+  # geyser.proto imports google/protobuf/timestamp.proto, so protoc also gets
+  # Protobuf's own include directories.
+  set(PROTOBUF_INCLUDES
+      "$<TARGET_PROPERTY:protobuf::libprotobuf,INTERFACE_INCLUDE_DIRECTORIES>")
+
+  add_custom_command(
+    OUTPUT ${YELLOWSTONE_GENERATED}
+    COMMAND protobuf::protoc
+      --cpp_out=${YELLOWSTONE_GEN_DIR}
+      --grpc_out=${YELLOWSTONE_GEN_DIR}
+      --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+      -I${YELLOWSTONE_PROTO_DIR}
+      "-I$<JOIN:${PROTOBUF_INCLUDES},;-I>"
+      ${YELLOWSTONE_PROTOS}
+    DEPENDS ${YELLOWSTONE_PROTOS}
+    COMMENT "Generating Yellowstone gRPC sources"
+    COMMAND_EXPAND_LISTS
+    VERBATIM)
+
+  add_library(eclipse_yellowstone_proto STATIC ${YELLOWSTONE_GENERATED})
+  target_include_directories(eclipse_yellowstone_proto PUBLIC
+    ${YELLOWSTONE_GEN_DIR})
+  target_link_libraries(eclipse_yellowstone_proto PUBLIC
+    protobuf::libprotobuf
+    gRPC::grpc++)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Generated code is not ours to hold to -Wpedantic.
+    target_compile_options(eclipse_yellowstone_proto PRIVATE -w)
+  endif()
+
+  target_sources(eclipse_core PRIVATE src/copytrade/geyser_client.cpp)
+  target_link_libraries(eclipse_core PUBLIC eclipse_yellowstone_proto)
+  add_dependencies(eclipse_core eclipse_yellowstone_proto)
+else()
+  target_sources(eclipse_core PRIVATE
+    src/copytrade/geyser_client_unavailable.cpp)
+endif()
 
 add_executable(eclipse src/main.cpp)
 target_link_libraries(eclipse PRIVATE eclipse_core)
