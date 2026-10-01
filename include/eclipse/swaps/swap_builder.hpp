@@ -33,4 +33,10 @@ inline constexpr std::uint32_t kSwapComputeUnitLimit = 1400000;
 /// Applies a slippage tolerance expressed in percent.
 std::uint64_t apply_slippage(std::uint64_t amount, double slippage_percent);
 
+/// The other direction: widens a cost ceiling by the tolerance, for
+/// instructions that take a maximum input (pump.fun's buy) rather than a
+/// minimum output.
+std::uint64_t apply_slippage_ceiling(std::uint64_t amount,
+                                     double slippage_percent);
+
 }  // namespace eclipse::swaps

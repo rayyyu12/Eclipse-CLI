@@ -162,15 +162,19 @@ std::optional<BondingCurveState> fetch_bonding_curve(net::RpcClient& client,
                                                      const Pubkey& mint) {
   auto address = derive_bonding_curve(mint);
   if (!address.has_value()) return std::nullopt;
+  return fetch_bonding_curve_at(client, *address);
+}
 
-  auto account = client.get_account_info(*address);
+std::optional<BondingCurveState> fetch_bonding_curve_at(
+    net::RpcClient& client, const Pubkey& curve_address) {
+  auto account = client.get_account_info(curve_address);
   if (!account.has_value()) return std::nullopt;
 
   const auto& data = account->data;
   if (data.size() < swaps::pump_offset::kComplete + 1) return std::nullopt;
 
   BondingCurveState state;
-  state.address = *address;
+  state.address = curve_address;
   state.virtual_token_reserves =
       solana::read_u64(data, swaps::pump_offset::kVirtualTokenReserves);
   state.virtual_sol_reserves =

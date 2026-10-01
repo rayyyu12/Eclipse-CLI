@@ -163,14 +163,22 @@ SwapResult finalize(net::RpcClient& client, const Keypair& wallet,
 }  // namespace
 
 bool await_confirmation(net::RpcClient& client, const std::string& signature,
-                        std::chrono::seconds timeout) {
+                        std::chrono::seconds timeout, net::Commitment level) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+  // Each level is satisfied by itself and anything stronger.
+  const auto reached = [level](const std::string& status) {
+    if (status == "finalized") return true;
+    if (status == "confirmed") return level != net::Commitment::Finalized;
+    if (status == "processed") return level == net::Commitment::Processed;
+    return false;
+  };
 
   while (std::chrono::steady_clock::now() < deadline) {
     auto status = client.get_signature_status(signature);
     if (status.has_value()) {
       if (*status == "failed") return false;
-      if (*status == "confirmed" || *status == "finalized") return true;
+      if (reached(*status)) return true;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }

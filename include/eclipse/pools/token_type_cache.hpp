@@ -64,4 +64,9 @@ std::optional<Pubkey> derive_bonding_curve(const Pubkey& mint);
 std::optional<BondingCurveState> fetch_bonding_curve(net::RpcClient& client,
                                                      const Pubkey& mint);
 
+/// Reads a curve whose address the caller has already derived. One round
+/// trip, no program-address search.
+std::optional<BondingCurveState> fetch_bonding_curve_at(
+    net::RpcClient& client, const Pubkey& curve_address);
+
 }  // namespace eclipse::pools

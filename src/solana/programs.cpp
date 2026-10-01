@@ -118,8 +118,12 @@ namespace associated_token {
 
 Instruction create_idempotent(const Pubkey& payer, const Pubkey& owner,
                               const Pubkey& mint) {
-  const Pubkey ata = Pubkey::associated_token_address(owner, mint);
+  return create_idempotent(payer, Pubkey::associated_token_address(owner, mint),
+                           owner, mint);
+}
 
+Instruction create_idempotent(const Pubkey& payer, const Pubkey& ata,
+                              const Pubkey& owner, const Pubkey& mint) {
   Instruction instruction;
   instruction.program_id = associated_token_program_id();
   instruction.accounts = {AccountMeta::signer(payer),

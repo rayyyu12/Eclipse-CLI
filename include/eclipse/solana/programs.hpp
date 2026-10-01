@@ -53,6 +53,11 @@ namespace associated_token {
 Instruction create_idempotent(const Pubkey& payer, const Pubkey& owner,
                               const Pubkey& mint);
 
+/// Same, for a caller that has already derived the account address and does
+/// not want to pay for the program-address search twice.
+Instruction create_idempotent(const Pubkey& payer, const Pubkey& ata,
+                              const Pubkey& owner, const Pubkey& mint);
+
 }  // namespace associated_token
 
 namespace compute_budget {

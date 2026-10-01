@@ -24,8 +24,13 @@ SwapResult sell_for_sol(net::RpcClient& client, const Keypair& wallet,
                         const Pubkey& token_mint, std::uint64_t token_amount,
                         const SwapOptions& options);
 
-/// Blocks until the signature reaches "confirmed" or the timeout elapses.
+/// Blocks until the signature reaches `level` (by default "confirmed") or the
+/// timeout elapses. False when the transaction failed on chain.
+///
+/// The copy trader waits for "processed" on pump.fun copies, as the
+/// TypeScript build did, since that is the first point the outcome is known.
 bool await_confirmation(net::RpcClient& client, const std::string& signature,
-                        std::chrono::seconds timeout);
+                        std::chrono::seconds timeout,
+                        net::Commitment level = net::Commitment::Confirmed);
 
 }  // namespace eclipse::swaps

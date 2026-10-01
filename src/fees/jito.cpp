@@ -142,14 +142,15 @@ solana::Instruction build_tip_instruction(const Pubkey& payer,
                                           lamports);
 }
 
-std::optional<std::string> send_bundle(
-    const std::vector<std::uint8_t>& wire_transaction) {
+namespace {
+
+std::optional<std::string> post_transaction(
+    const std::vector<std::uint8_t>& wire_transaction, const Json& config) {
   const Json request = {
       {"jsonrpc", "2.0"},
       {"id", 1},
       {"method", "sendTransaction"},
-      {"params", Json::array({base64_encode(wire_transaction),
-                              {{"encoding", "base64"}}})}};
+      {"params", Json::array({base64_encode(wire_transaction), config})}};
 
   const auto response =
       net::HttpClient::instance().post_json(kBlockEngineUrl, request.dump());
@@ -172,6 +173,22 @@ std::optional<std::string> send_bundle(
     return parsed["result"].get<std::string>();
   }
   return std::nullopt;
+}
+
+}  // namespace
+
+std::optional<std::string> send_bundle(
+    const std::vector<std::uint8_t>& wire_transaction) {
+  return post_transaction(wire_transaction, {{"encoding", "base64"}});
+}
+
+std::optional<std::string> send_bundle(
+    const std::vector<std::uint8_t>& wire_transaction,
+    const JitoSendOptions& options) {
+  return post_transaction(wire_transaction,
+                          {{"encoding", "base64"},
+                           {"skipPreflight", options.skip_preflight},
+                           {"bundleOnly", options.bundle_only}});
 }
 
 }  // namespace eclipse::fees

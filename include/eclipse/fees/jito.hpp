@@ -43,4 +43,17 @@ solana::Instruction build_tip_instruction(const Pubkey& payer,
 std::optional<std::string> send_bundle(
     const std::vector<std::uint8_t>& wire_transaction);
 
+/// The sendTransaction config the TypeScript copy trader passed to the block
+/// engine: no preflight simulation, and bundle-only so the transaction is
+/// forwarded as a single-transaction bundle rather than to the leader.
+struct JitoSendOptions {
+  bool skip_preflight = true;
+  bool bundle_only = true;
+};
+
+/// As above, with the options written into the request's config object.
+std::optional<std::string> send_bundle(
+    const std::vector<std::uint8_t>& wire_transaction,
+    const JitoSendOptions& options);
+
 }  // namespace eclipse::fees

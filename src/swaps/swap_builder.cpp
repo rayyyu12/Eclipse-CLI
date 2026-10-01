@@ -118,4 +118,12 @@ std::uint64_t apply_slippage(std::uint64_t amount, double slippage_percent) {
   return static_cast<std::uint64_t>(result);
 }
 
+std::uint64_t apply_slippage_ceiling(std::uint64_t amount,
+                                     double slippage_percent) {
+  const double clamped = std::clamp(slippage_percent, 0.0, 100.0);
+  const double factor = 1.0 + clamped / 100.0;
+  return static_cast<std::uint64_t>(
+      std::floor(static_cast<double>(amount) * factor));
+}
+
 }  // namespace eclipse::swaps
