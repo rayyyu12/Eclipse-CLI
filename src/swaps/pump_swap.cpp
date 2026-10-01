@@ -35,26 +35,20 @@ std::vector<std::uint8_t> build_pump_data(const std::uint8_t (&discriminator)[8]
   return data;
 }
 
-/// Account order fixed by the pump.fun program.
-std::vector<solana::AccountMeta> pump_accounts(const Pubkey& mint,
-                                               const Pubkey& curve,
-                                               const Pubkey& curve_ata,
-                                               const Pubkey& user_ata,
-                                               const Pubkey& user) {
+/// The account order both instructions share, up to and including the
+/// system program. The four slots after it differ; see the builders.
+std::vector<solana::AccountMeta> leading_accounts(
+    const PumpTradeAccounts& accounts) {
   using solana::AccountMeta;
   return {
       AccountMeta::readonly(pump_fun_global()),
       AccountMeta::writable(pump_fun_fee_recipient()),
-      AccountMeta::readonly(mint),
-      AccountMeta::writable(curve),
-      AccountMeta::writable(curve_ata),
-      AccountMeta::writable(user_ata),
-      AccountMeta::signer(user),
+      AccountMeta::readonly(accounts.mint),
+      AccountMeta::writable(accounts.bonding_curve),
+      AccountMeta::writable(accounts.associated_bonding_curve),
+      AccountMeta::writable(accounts.user_token_account),
+      AccountMeta::signer(accounts.user),
       AccountMeta::readonly(solana::system_program_id()),
-      AccountMeta::readonly(solana::token_program_id()),
-      AccountMeta::readonly(solana::rent_sysvar_id()),
-      AccountMeta::readonly(pump_fun_event_authority()),
-      AccountMeta::readonly(pump_fun_program_id()),
   };
 }
 
@@ -62,6 +56,11 @@ struct PumpContext {
   pools::BondingCurveState curve;
   Pubkey curve_ata;
   Pubkey user_ata;
+
+  PumpTradeAccounts trade_accounts(const Pubkey& mint,
+                                   const Pubkey& user) const {
+    return {mint, curve.address, curve_ata, user, user_ata};
+  }
 };
 
 std::optional<PumpContext> load_context(net::RpcClient& client,
@@ -154,6 +153,40 @@ SwapResult submit(net::RpcClient& client, const Keypair& wallet,
 
 }  // namespace
 
+solana::Instruction build_pump_buy_instruction(const PumpTradeAccounts& accounts,
+                                               std::uint64_t token_amount,
+                                               std::uint64_t max_sol_cost) {
+  using solana::AccountMeta;
+
+  solana::Instruction buy;
+  buy.program_id = pump_fun_program_id();
+  buy.accounts = leading_accounts(accounts);
+  buy.accounts.push_back(AccountMeta::readonly(solana::token_program_id()));
+  buy.accounts.push_back(AccountMeta::readonly(solana::rent_sysvar_id()));
+  buy.accounts.push_back(AccountMeta::readonly(pump_fun_event_authority()));
+  buy.accounts.push_back(AccountMeta::readonly(pump_fun_program_id()));
+  buy.data = build_pump_data(kPumpBuyDiscriminator, token_amount, max_sol_cost);
+  return buy;
+}
+
+solana::Instruction build_pump_sell_instruction(
+    const PumpTradeAccounts& accounts, std::uint64_t token_amount,
+    std::uint64_t min_sol_output) {
+  using solana::AccountMeta;
+
+  solana::Instruction sell;
+  sell.program_id = pump_fun_program_id();
+  sell.accounts = leading_accounts(accounts);
+  sell.accounts.push_back(
+      AccountMeta::readonly(solana::associated_token_program_id()));
+  sell.accounts.push_back(AccountMeta::readonly(solana::token_program_id()));
+  sell.accounts.push_back(AccountMeta::readonly(pump_fun_event_authority()));
+  sell.accounts.push_back(AccountMeta::readonly(pump_fun_program_id()));
+  sell.data =
+      build_pump_data(kPumpSellDiscriminator, token_amount, min_sol_output);
+  return sell;
+}
+
 std::uint64_t curve_buy_output(const pools::BondingCurveState& curve,
                                std::uint64_t sol_in) {
   if (sol_in == 0 || curve.virtual_sol_reserves == 0 ||
@@ -226,20 +259,14 @@ SwapResult pump_buy(net::RpcClient& client, const Keypair& wallet,
   instructions.push_back(solana::associated_token::create_idempotent(
       wallet.pubkey(), wallet.pubkey(), token_mint));
 
-  solana::Instruction buy;
-  buy.program_id = pump_fun_program_id();
-  buy.accounts =
-      pump_accounts(token_mint, context->curve.address, context->curve_ata,
-                    context->user_ata, wallet.pubkey());
   // Buy takes the token amount and a maximum SOL cost, so slippage widens the
-  // cost ceiling rather than narrowing the output. apply_slippage only ever
-  // reduces, so the ceiling is computed directly.
-  const auto max_sol_cost = static_cast<std::uint64_t>(
-      static_cast<double>(sol_lamports) *
-      (1.0 + std::clamp(options.slippage_percent, 0.0, 100.0) / 100.0));
+  // cost ceiling rather than narrowing the output.
+  const std::uint64_t max_sol_cost =
+      apply_slippage_ceiling(sol_lamports, options.slippage_percent);
 
-  buy.data = build_pump_data(kPumpBuyDiscriminator, min_out, max_sol_cost);
-  instructions.push_back(std::move(buy));
+  instructions.push_back(build_pump_buy_instruction(
+      context->trade_accounts(token_mint, wallet.pubkey()), min_out,
+      max_sol_cost));
 
   return submit(client, wallet, std::move(instructions), options, sol_lamports,
                 expected, min_out, started);
@@ -270,15 +297,11 @@ SwapResult pump_sell(net::RpcClient& client, const Keypair& wallet,
   Logger::instance().info(
       "PumpSwap", "Selling " + token_mint.to_base58() + " into the curve");
 
-  solana::Instruction sell;
-  sell.program_id = pump_fun_program_id();
-  sell.accounts =
-      pump_accounts(token_mint, context->curve.address, context->curve_ata,
-                    context->user_ata, wallet.pubkey());
-  sell.data = build_pump_data(kPumpSellDiscriminator, token_amount, min_out);
-
-  return submit(client, wallet, {std::move(sell)}, options, token_amount,
-                expected, min_out, started);
+  return submit(client, wallet,
+                {build_pump_sell_instruction(
+                    context->trade_accounts(token_mint, wallet.pubkey()),
+                    token_amount, min_out)},
+                options, token_amount, expected, min_out, started);
 }
 
 }  // namespace eclipse::swaps
