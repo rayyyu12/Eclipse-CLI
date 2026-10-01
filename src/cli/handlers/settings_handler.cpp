@@ -51,9 +51,11 @@ void configure_connection() {
   row("2", "Private key",
       state_of([&] { return credentials.get_private_key(); }));
   row("3", "GRPC URL", state_of([&] { return credentials.get_grpc_url(); }));
-  row("4", "WebSocket endpoint",
+  row("4", "GRPC x-token",
+      state_of([&] { return credentials.get_auth_token(); }));
+  row("5", "WebSocket endpoint",
       state_of([&] { return credentials.get_ws_endpoint(); }));
-  row("5", "Back", "");
+  row("6", "Back", "");
 
   std::string choice;
   if (!prompt("\nSelect: ", choice)) return;
@@ -101,6 +103,15 @@ void configure_connection() {
       display_success("GRPC URL saved");
 
     } else if (choice == "4") {
+      // The copy trader sends this as the x-token header on its Yellowstone
+      // stream. It is a credential, so it is read without echo, kept in the
+      // encrypted store, and never logged.
+      std::string token;
+      if (!prompt_hidden("GRPC x-token (input hidden): ", token)) return;
+      credentials.set_auth_token(token);
+      display_success("GRPC x-token saved");
+
+    } else if (choice == "5") {
       std::string url;
       if (!prompt_validated("WebSocket endpoint: ", validate_ws_url,
                             "Must start with ws:// or wss://", url)) {
@@ -302,7 +313,8 @@ void configure_wallets() {
 }
 
 void clear_credentials() {
-  display_warning("This deletes the stored RPC URL and private key.");
+  display_warning("This deletes the stored RPC URL, private key, GRPC URL, "
+                  "x-token and tracked wallets.");
 
   std::string confirmation;
   if (!prompt("Type 'yes' to confirm: ", confirmation) ||

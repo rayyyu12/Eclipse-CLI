@@ -3,6 +3,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace eclipse::cli {
 
@@ -37,11 +38,40 @@ struct NotificationSettings {
   bool notify_on_errors = true;
 };
 
+/// How the copy trader sizes a buy.
+///
+///   Fixed   always spends fixed_buy_amount
+///   Mirror  spends what the followed wallet spent
+enum class BuyMode { Fixed, Mirror };
+const char* to_string(BuyMode mode);
+BuyMode buy_mode_from_string(const std::string& text);
+
+/// The followed wallets are not here: they live in the encrypted store via
+/// WalletStorage, because who a user copies is worth keeping private.
+struct CopyTradeSettings {
+  BuyMode buy_mode = BuyMode::Fixed;
+  double fixed_buy_amount = 0.0001;  ///< SOL
+  double min_buy_amount = 0.0;       ///< SOL; a smaller buy is refused
+  double max_buy_amount = 100.0;     ///< SOL; a larger buy is refused
+
+  bool enable_pump = true;
+  bool enable_raydium = true;
+
+  double pump_slippage = 10.0;     ///< percent
+  double raydium_slippage = 50.0;  ///< percent
+};
+
+/// Every rule the settings break, empty when they are valid. The checks are
+/// the TypeScript build's validateSettings.
+std::vector<std::string> validate_copy_trade_settings(
+    const CopyTradeSettings& settings);
+
 struct Settings {
   FeeSettings fees;
   TradeSettings trade;
   ConnectionSettings connection;
   NotificationSettings notifications;
+  CopyTradeSettings copy_trade;
 };
 
 /// Reads and writes settings.json next to the binary. Plain JSON: nothing
@@ -57,6 +87,10 @@ class SettingsManager {
   void update_trade(const TradeSettings& trade);
   void update_connection(const ConnectionSettings& connection);
   void update_notifications(const NotificationSettings& notifications);
+
+  /// Throws std::invalid_argument, listing every broken rule, and leaves the
+  /// stored settings untouched when the new ones do not validate.
+  void update_copy_trade(const CopyTradeSettings& copy_trade);
 
   void reset_to_defaults();
 
