@@ -104,7 +104,10 @@ add_library(eclipse_core STATIC
   src/copytrade/transaction_parser.cpp
   src/copytrade/copy_trade_logger.cpp
   src/copytrade/copy_swap.cpp
+  src/copytrade/copy_executor.cpp
   src/copytrade/stream_supervisor.cpp
+  src/copytrade/transaction_monitor.cpp
+  src/copytrade/balance_monitor.cpp
 )
 
 target_include_directories(eclipse_core PUBLIC include)
